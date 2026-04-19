@@ -1,0 +1,1052 @@
+[
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 9505.1,
+    "rtt_ms": 16.75,
+    "loss_pct": 0.3188
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 7267.1,
+    "rtt_ms": 61.9,
+    "loss_pct": 0.0385
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 5319.5,
+    "rtt_ms": 86.09,
+    "loss_pct": 0.4203
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 8177.9,
+    "rtt_ms": 58.44,
+    "loss_pct": 0.2417
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 1646.2,
+    "rtt_ms": 27.33,
+    "loss_pct": 0.0598
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 1602.7,
+    "rtt_ms": 94.66,
+    "loss_pct": 0.0708
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 6101.0,
+    "rtt_ms": 44.56,
+    "loss_pct": 0.4816
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 1995.4,
+    "rtt_ms": 65.61,
+    "loss_pct": 0.337
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 6347.4,
+    "rtt_ms": 37.09,
+    "loss_pct": 0.274
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 5513.3,
+    "rtt_ms": 67.52,
+    "loss_pct": 0.2985
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 2374.1,
+    "rtt_ms": 64.22,
+    "loss_pct": 0.3801
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 3615.7,
+    "rtt_ms": 65.18,
+    "loss_pct": 0.0813
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 2670.7,
+    "rtt_ms": 40.5,
+    "loss_pct": 0.2267
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 8730.7,
+    "rtt_ms": 62.52,
+    "loss_pct": 0.4722
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 1959.1,
+    "rtt_ms": 42.47,
+    "loss_pct": 0.2138
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 3492.6,
+    "rtt_ms": 82.07,
+    "loss_pct": 0.3504
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 3803.8,
+    "rtt_ms": 26.06,
+    "loss_pct": 0.2686
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 6106.7,
+    "rtt_ms": 88.27,
+    "loss_pct": 0.4371
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 5171.4,
+    "rtt_ms": 18.21,
+    "loss_pct": 0.174
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 3708.7,
+    "rtt_ms": 62.01,
+    "loss_pct": 0.2831
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 4324.9,
+    "rtt_ms": 40.54,
+    "loss_pct": 0.4308
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 512.2,
+    "rtt_ms": 44.73,
+    "loss_pct": 0.3663
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 6772.0,
+    "rtt_ms": 29.89,
+    "loss_pct": 0.1503
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 1468.1,
+    "rtt_ms": 79.52,
+    "loss_pct": 0.4251
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 7307.7,
+    "rtt_ms": 55.8,
+    "loss_pct": 0.1367
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 841.0,
+    "rtt_ms": 16.16,
+    "loss_pct": 0.3156
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 3431.1,
+    "rtt_ms": 12.09,
+    "loss_pct": 0.4726
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 3536.1,
+    "rtt_ms": 41.27,
+    "loss_pct": 0.0325
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 7120.3,
+    "rtt_ms": 13.63,
+    "loss_pct": 0.418
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 8769.9,
+    "rtt_ms": 36.86,
+    "loss_pct": 0.3195
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 1968.0,
+    "rtt_ms": 47.34,
+    "loss_pct": 0.0495
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 6519.5,
+    "rtt_ms": 89.21,
+    "loss_pct": 0.0465
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 9017.0,
+    "rtt_ms": 39.86,
+    "loss_pct": 0.3778
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 5260.0,
+    "rtt_ms": 47.39,
+    "loss_pct": 0.3509
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 5936.5,
+    "rtt_ms": 96.84,
+    "loss_pct": 0.4286
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 7238.7,
+    "rtt_ms": 41.14,
+    "loss_pct": 0.4705
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 2391.7,
+    "rtt_ms": 12.2,
+    "loss_pct": 0.1224
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 1789.1,
+    "rtt_ms": 51.55,
+    "loss_pct": 0.0251
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 5533.2,
+    "rtt_ms": 31.44,
+    "loss_pct": 0.246
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 5672.9,
+    "rtt_ms": 53.62,
+    "loss_pct": 0.4563
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 3448.9,
+    "rtt_ms": 50.67,
+    "loss_pct": 0.0284
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 4960.2,
+    "rtt_ms": 85.58,
+    "loss_pct": 0.4572
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 2894.0,
+    "rtt_ms": 52.0,
+    "loss_pct": 0.3386
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 4709.6,
+    "rtt_ms": 84.32,
+    "loss_pct": 0.1347
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 6857.9,
+    "rtt_ms": 26.63,
+    "loss_pct": 0.0703
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 4807.0,
+    "rtt_ms": 64.79,
+    "loss_pct": 0.1546
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 8004.9,
+    "rtt_ms": 31.41,
+    "loss_pct": 0.1619
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 5702.7,
+    "rtt_ms": 55.49,
+    "loss_pct": 0.2864
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 2870.2,
+    "rtt_ms": 51.08,
+    "loss_pct": 0.459
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 2753.5,
+    "rtt_ms": 61.47,
+    "loss_pct": 0.2874
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 2878.7,
+    "rtt_ms": 43.47,
+    "loss_pct": 0.4519
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 7772.0,
+    "rtt_ms": 90.97,
+    "loss_pct": 0.4027
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 6591.2,
+    "rtt_ms": 88.67,
+    "loss_pct": 0.2773
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 6516.7,
+    "rtt_ms": 31.78,
+    "loss_pct": 0.3293
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 8202.3,
+    "rtt_ms": 89.33,
+    "loss_pct": 0.0124
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 7873.5,
+    "rtt_ms": 61.99,
+    "loss_pct": 0.3607
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 807.6,
+    "rtt_ms": 64.21,
+    "loss_pct": 0.4605
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 9996.2,
+    "rtt_ms": 74.7,
+    "loss_pct": 0.2628
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 1947.6,
+    "rtt_ms": 21.36,
+    "loss_pct": 0.3347
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 2842.6,
+    "rtt_ms": 66.25,
+    "loss_pct": 0.2969
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 2644.0,
+    "rtt_ms": 57.03,
+    "loss_pct": 0.2253
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 6834.2,
+    "rtt_ms": 65.49,
+    "loss_pct": 0.2416
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 904.2,
+    "rtt_ms": 29.03,
+    "loss_pct": 0.4341
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 6488.0,
+    "rtt_ms": 37.1,
+    "loss_pct": 0.3308
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 8773.0,
+    "rtt_ms": 65.77,
+    "loss_pct": 0.1204
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 7197.4,
+    "rtt_ms": 38.53,
+    "loss_pct": 0.1744
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 6574.6,
+    "rtt_ms": 12.25,
+    "loss_pct": 0.1375
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 8024.8,
+    "rtt_ms": 47.99,
+    "loss_pct": 0.0318
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 6372.2,
+    "rtt_ms": 84.88,
+    "loss_pct": 0.4599
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 1571.1,
+    "rtt_ms": 54.96,
+    "loss_pct": 0.297
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 8889.5,
+    "rtt_ms": 91.35,
+    "loss_pct": 0.2728
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 1459.5,
+    "rtt_ms": 35.02,
+    "loss_pct": 0.3178
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 1811.8,
+    "rtt_ms": 28.66,
+    "loss_pct": 0.1625
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 7516.1,
+    "rtt_ms": 18.55,
+    "loss_pct": 0.3791
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 9364.7,
+    "rtt_ms": 39.75,
+    "loss_pct": 0.0014
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 7408.1,
+    "rtt_ms": 21.81,
+    "loss_pct": 0.367
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 7102.1,
+    "rtt_ms": 54.19,
+    "loss_pct": 0.2879
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 4918.1,
+    "rtt_ms": 30.36,
+    "loss_pct": 0.1343
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 1796.3,
+    "rtt_ms": 24.18,
+    "loss_pct": 0.4743
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 1198.6,
+    "rtt_ms": 55.38,
+    "loss_pct": 0.3822
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 3666.9,
+    "rtt_ms": 62.45,
+    "loss_pct": 0.0707
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 6925.4,
+    "rtt_ms": 31.38,
+    "loss_pct": 0.2221
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 1261.1,
+    "rtt_ms": 26.72,
+    "loss_pct": 0.2975
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 9182.5,
+    "rtt_ms": 76.66,
+    "loss_pct": 0.2097
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 3617.2,
+    "rtt_ms": 10.7,
+    "loss_pct": 0.3735
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 7627.7,
+    "rtt_ms": 88.13,
+    "loss_pct": 0.3605
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 9605.4,
+    "rtt_ms": 30.87,
+    "loss_pct": 0.2025
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 6593.8,
+    "rtt_ms": 61.91,
+    "loss_pct": 0.3256
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 6285.1,
+    "rtt_ms": 13.37,
+    "loss_pct": 0.1377
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 920.8,
+    "rtt_ms": 98.52,
+    "loss_pct": 0.3387
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 3248.7,
+    "rtt_ms": 34.06,
+    "loss_pct": 0.429
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 1911.7,
+    "rtt_ms": 58.47,
+    "loss_pct": 0.1726
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 737.7,
+    "rtt_ms": 89.58,
+    "loss_pct": 0.2807
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 7178.4,
+    "rtt_ms": 50.86,
+    "loss_pct": 0.3437
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 7592.3,
+    "rtt_ms": 40.48,
+    "loss_pct": 0.0576
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 6538.9,
+    "rtt_ms": 98.29,
+    "loss_pct": 0.1268
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 6957.1,
+    "rtt_ms": 69.46,
+    "loss_pct": 0.0428
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 1057.0,
+    "rtt_ms": 44.11,
+    "loss_pct": 0.4927
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 7658.0,
+    "rtt_ms": 86.81,
+    "loss_pct": 0.4767
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 3287.7,
+    "rtt_ms": 13.94,
+    "loss_pct": 0.0997
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 9342.8,
+    "rtt_ms": 85.53,
+    "loss_pct": 0.325
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 5226.5,
+    "rtt_ms": 93.19,
+    "loss_pct": 0.2596
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 1236.1,
+    "rtt_ms": 35.72,
+    "loss_pct": 0.1359
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 5270.0,
+    "rtt_ms": 91.04,
+    "loss_pct": 0.4002
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 1977.1,
+    "rtt_ms": 96.15,
+    "loss_pct": 0.1683
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 7775.4,
+    "rtt_ms": 21.56,
+    "loss_pct": 0.2376
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 7113.6,
+    "rtt_ms": 22.35,
+    "loss_pct": 0.3078
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 8677.4,
+    "rtt_ms": 97.78,
+    "loss_pct": 0.0654
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 4274.9,
+    "rtt_ms": 39.35,
+    "loss_pct": 0.1381
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 9993.5,
+    "rtt_ms": 50.48,
+    "loss_pct": 0.1743
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 8559.2,
+    "rtt_ms": 51.08,
+    "loss_pct": 0.4007
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 8379.9,
+    "rtt_ms": 34.07,
+    "loss_pct": 0.0902
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 9203.2,
+    "rtt_ms": 36.55,
+    "loss_pct": 0.3073
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 2709.9,
+    "rtt_ms": 29.69,
+    "loss_pct": 0.2632
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 5856.2,
+    "rtt_ms": 37.35,
+    "loss_pct": 0.3114
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 6172.9,
+    "rtt_ms": 11.92,
+    "loss_pct": 0.3934
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 8042.0,
+    "rtt_ms": 51.14,
+    "loss_pct": 0.0554
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 5254.5,
+    "rtt_ms": 54.44,
+    "loss_pct": 0.0402
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 4044.0,
+    "rtt_ms": 46.54,
+    "loss_pct": 0.2825
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 930.3,
+    "rtt_ms": 41.01,
+    "loss_pct": 0.0319
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 7286.0,
+    "rtt_ms": 55.41,
+    "loss_pct": 0.0863
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 1516.8,
+    "rtt_ms": 59.79,
+    "loss_pct": 0.1362
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 6636.0,
+    "rtt_ms": 91.71,
+    "loss_pct": 0.0447
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 8760.0,
+    "rtt_ms": 39.97,
+    "loss_pct": 0.4785
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 8154.9,
+    "rtt_ms": 92.33,
+    "loss_pct": 0.2812
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 2584.4,
+    "rtt_ms": 86.19,
+    "loss_pct": 0.3987
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 5696.9,
+    "rtt_ms": 90.83,
+    "loss_pct": 0.0466
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 648.6,
+    "rtt_ms": 28.55,
+    "loss_pct": 0.0504
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 2534.8,
+    "rtt_ms": 95.29,
+    "loss_pct": 0.2431
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 3043.5,
+    "rtt_ms": 28.99,
+    "loss_pct": 0.4715
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 3203.3,
+    "rtt_ms": 99.02,
+    "loss_pct": 0.2717
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 4281.3,
+    "rtt_ms": 68.46,
+    "loss_pct": 0.1248
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 516.1,
+    "rtt_ms": 93.3,
+    "loss_pct": 0.2692
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 4853.7,
+    "rtt_ms": 99.86,
+    "loss_pct": 0.498
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 6527.7,
+    "rtt_ms": 10.42,
+    "loss_pct": 0.1368
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 6537.3,
+    "rtt_ms": 72.41,
+    "loss_pct": 0.3226
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 8750.4,
+    "rtt_ms": 54.18,
+    "loss_pct": 0.4364
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 2141.7,
+    "rtt_ms": 29.32,
+    "loss_pct": 0.0936
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 2863.8,
+    "rtt_ms": 72.42,
+    "loss_pct": 0.1722
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 3936.9,
+    "rtt_ms": 78.08,
+    "loss_pct": 0.3127
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 6495.5,
+    "rtt_ms": 30.6,
+    "loss_pct": 0.4527
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 5160.7,
+    "rtt_ms": 25.14,
+    "loss_pct": 0.3975
+  },
+  {
+    "cca": "Reno",
+    "label": 0,
+    "bw_mbps": 3862.2,
+    "rtt_ms": 18.38,
+    "loss_pct": 0.299
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 7017.9,
+    "rtt_ms": 54.12,
+    "loss_pct": 0.4549
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 7442.3,
+    "rtt_ms": 19.22,
+    "loss_pct": 0.1567
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 8324.9,
+    "rtt_ms": 43.5,
+    "loss_pct": 0.3151
+  },
+  {
+    "cca": "BBR",
+    "label": 1,
+    "bw_mbps": 7730.0,
+    "rtt_ms": 36.29,
+    "loss_pct": 0.1374
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 596.4,
+    "rtt_ms": 95.33,
+    "loss_pct": 0.0428
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 6762.2,
+    "rtt_ms": 85.45,
+    "loss_pct": 0.3141
+  },
+  {
+    "cca": "CUBIC",
+    "label": 0,
+    "bw_mbps": 8711.4,
+    "rtt_ms": 97.02,
+    "loss_pct": 0.1396
+  }
+]
