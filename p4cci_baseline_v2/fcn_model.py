@@ -14,9 +14,9 @@ Training (from paper):
   - 100 epochs
   - Input sequence length L=20 BIF samples (paper Section IV-A)
 
-Classes:
-  0 = Loss-based (CUBIC, Reno, Westwood)
-  1 = Model-based (BBR, Vegas)
+Classes (paper Section III-F):
+  0 = Loss-based (CUBIC, Reno, Westwood, Illinois, Vegas)
+  1 = Model-based (BBR)
 """
 
 import os
@@ -79,11 +79,12 @@ if TORCH_AVAILABLE:
             x = F.relu(self.bn2(self.conv2(x)))
             # Block 3
             x = F.relu(self.bn3(self.conv3(x)))
-            # Global Average Pooling: mean across time dimension
+            # Global Average Pooling: mean across time dimension (paper Section IV-B)
             x = x.mean(dim=2)           # (N, 128)
-            # Output (logits -> softmax)
+            # Output: return RAW LOGITS. CrossEntropyLoss applies LogSoftmax internally.
+            # For inference, apply softmax explicitly via predict_single().
             x = self.fc(x)              # (N, 2)
-            return F.softmax(x, dim=1)
+            return x
 
     def build_model(num_classes=NUM_CLASSES):
         """Return a fresh (untrained) FCN model instance."""
@@ -265,6 +266,11 @@ def train_fcn(X_train, y_train, X_val=None, y_val=None,
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = nn.CrossEntropyLoss()
 
+    # Paper: "The learning rate was reduced when the optimizer reached a plateau."
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode='min', factor=0.5, patience=10
+    )
+
     if X_val is not None:
         X_v, y_v = to_tensor(X_val, y_val)
 
@@ -281,9 +287,13 @@ def train_fcn(X_train, y_train, X_val=None, y_val=None,
             correct    += (logits.argmax(dim=1) == yb).sum().item()
             total      += len(yb)
 
+        avg_loss = total_loss / total
+        scheduler.step(avg_loss)   # reduce lr on plateau
+
         if verbose and (epoch % 10 == 0 or epoch == 1):
             acc = correct / total * 100
-            msg = f"  Epoch {epoch:3d}/{epochs} | Loss={total_loss/total:.4f} | Train Acc={acc:.1f}%"
+            cur_lr = optimizer.param_groups[0]['lr']
+            msg = f"  Epoch {epoch:3d}/{epochs} | Loss={avg_loss:.4f} | Train Acc={acc:.1f}% | lr={cur_lr:.6f}"
             if X_val is not None:
                 model.eval()
                 with torch.no_grad():
@@ -328,7 +338,8 @@ def predict_single(model, raw_bif, seq_len=SEQ_LENGTH):
     ts = preprocess(raw_bif, seq_len=seq_len)
     x  = torch.tensor([[ts]], dtype=torch.float32)   # (1, 1, L)
     with torch.no_grad():
-        probs = model(x)                              # (1, 2)
+        logits = model(x)                              # (1, 2)
+        probs  = F.softmax(logits, dim=1)              # apply softmax for inference
     class_id   = probs.argmax(dim=1).item()
     confidence = probs.max(dim=1).values.item()
     return class_id, confidence

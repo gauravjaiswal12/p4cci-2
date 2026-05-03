@@ -1,0 +1,2 @@
+run,topology,duration,num_flows,jfi,agg_throughput_mbps,link_util_pct,pdr_pct,fwd_1,drops_1,fwd_2,drops_2,fwd_3,drops_3,fwd_4,drops_4
+1,dumbbell,20,4,0.9941,2.919,97.3,0.0,2002500,0,1627500,0,1770000,0,1897500,0

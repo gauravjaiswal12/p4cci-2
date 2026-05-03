@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 evaluate.py - Standalone P4CCI metrics evaluator.
 
@@ -403,77 +403,22 @@ def ascii_throughput_chart(timeseries_dict, title='Throughput over Time'):
 
 
 # -----------------------------------------------------------------------------
-# Demo with synthetic data
+# Demo with synthetic data (DISABLED)
 # -----------------------------------------------------------------------------
 
 def run_demo():
     """
-    Demonstrate all metrics using synthetic iperf3 data
-    matching the paper's expected results.
+    Demonstrate all metrics. Synthetic data was previously used here,
+    but has been removed to ensure all metrics reflect actual experimentation.
+    Please run this script with real iperf logs to evaluate performance.
     """
     print("=" * 60)
-    print("  P4CCI Metrics Demo - Synthetic Data")
+    print("  P4CCI Metrics Evaluator")
     print("=" * 60)
-    print("  (Reproducing expected results from paper Section VI)")
-
-    # -- Baseline scenario ---------------------------------------------------
-    # CUBIC starved when competing with BBR (paper Fig. 5)
-    baseline_cubic_ts = [22.4, 25.6, 20.6, 7.8, 7.3, 7.1, 14.5, 0.0, 15.1, 7.3]
-    baseline_bbr_ts   = [5.9, 18.0, 20.3, 11.3, 11.1, 11.3, 11.3, 11.1, 11.3, 11.3]
-
-    baseline_data = {
-        'CUBIC (h1->h3, port 5001)': {
-            'avg': _mean(baseline_cubic_ts),
-            'ts':  baseline_cubic_ts,
-            'retx': 839,
-        },
-        'BBR   (h2->h4, port 5002)': {
-            'avg': _mean(baseline_bbr_ts),
-            'ts':  baseline_bbr_ts,
-            'retx': 1469,
-        },
-    }
-
-    ascii_throughput_chart(
-        {'CUBIC': baseline_cubic_ts, 'BBR': baseline_bbr_ts},
-        title='Baseline: CUBIC vs BBR (No Separation)'
-    )
-    baseline_metrics = print_scenario_report(
-        'Baseline - No CCA-Aware Separation',
-        baseline_data,
-        link_capacity_mbps=1000.0,
-    )
-
-    # -- P4CCI scenario ----------------------------------------------------
-    # After queue separation, flows share bandwidth fairly (paper Fig. 6)
-    p4cci_cubic_ts = [470, 480, 475, 478, 472, 476, 479, 481, 474, 477]
-    p4cci_bbr_ts   = [478, 476, 480, 482, 475, 479, 477, 480, 476, 482]
-
-    p4cci_data = {
-        'CUBIC  (Q1 â€” loss-based)': {
-            'avg': _mean(p4cci_cubic_ts),
-            'ts':  p4cci_cubic_ts,
-            'retx': 42,
-        },
-        'BBR    (Q2 â€” model-based)': {
-            'avg': _mean(p4cci_bbr_ts),
-            'ts':  p4cci_bbr_ts,
-            'retx': 15,
-        },
-    }
-
-    ascii_throughput_chart(
-        {'CUBIC (Q1)': p4cci_cubic_ts, 'BBR (Q2)': p4cci_bbr_ts},
-        title='P4CCI: CUBIC vs BBR (With Queue Separation)'
-    )
-    p4cci_metrics = print_scenario_report(
-        'P4CCI â€” CCA-Aware Queue Separation',
-        p4cci_data,
-        link_capacity_mbps=1000.0,
-    )
-
-    # -- Comparison --------------------------------------------------------
-    print_comparison({'Baseline': baseline_metrics, 'P4CCI': p4cci_metrics})
+    print("  [INFO] Synthetic demo mode is disabled.")
+    print("  To evaluate performance, please provide actual log files:")
+    print("    python3 evaluate.py --cubic /tmp/cubic.log --bbr /tmp/bbr.log")
+    print("=" * 60)
 
 
 # -----------------------------------------------------------------------------

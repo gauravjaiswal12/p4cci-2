@@ -165,7 +165,7 @@ def classify_flow(flow_key, raw_bif):
     mu    = _mean(ts_norm)
 
     print(f"[+] Flow {flow_key}")
-    print(f"    BIF samples: {len(raw_bif)}  |  σ={sigma:.4f}  |  μ={mu:.4f}")
+    print(f"    BIF samples: {len(raw_bif)}  |  std={sigma:.4f}  |  mean={mu:.4f}")
     print(f"    Classifier: {method}  ->  {label_str}  (conf={confidence:.3f})")
     return pred, label_str, confidence
 
@@ -349,7 +349,9 @@ def process_digest(digest_data):
 # -----------------------------------------------------------------------------
 
 def simulate_bif_stream(flow_key, pattern='cubic', seed=42):
-    """Generates synthetic BIF samples for pipeline validation."""
+    """Generates synthetic BIF samples for pipeline validation.
+    Uses the same BDP-scaled generation logic as generate_dataset.py
+    so the FCN sees patterns matching its training distribution."""
     import random
     rng = random.Random(seed)
 
@@ -357,16 +359,29 @@ def simulate_bif_stream(flow_key, pattern='cubic', seed=42):
     print(f"[SIM] Simulating {pattern.upper()} flow: {flow_key}")
     print(f"{'='*60}")
 
+    # Use realistic BDP-scaled BIF values (1 Gbps, 20ms RTT)
+    bw_mbps = 1000.0
+    rtt_ms  = 20.0
+    bdp     = (bw_mbps * 1e6 / 8) * (rtt_ms / 1000.0)   # ~2.5 MB
+
     bif_vals = []
     for i in range(SEQ_LENGTH):
         if pattern == 'cubic':
-            ramp = (i % 10) + 1
-            bif  = ramp * 1460 + rng.gauss(0, 500)
+            # CUBIC: sawtooth window growth (high variance BIF)
+            window_period = 20
+            ramp = (i % window_period) + 1
+            base = (ramp / window_period) * bdp * 0.8
+            bif  = base + rng.gauss(0, base * 0.1 + 500)
         elif pattern == 'reno':
-            ramp = (i % 8) + 1
-            bif  = ramp * 1200 + rng.gauss(0, 400)
+            # Reno: steeper AIMD sawtooth
+            window_period = 15
+            ramp = (i % window_period) + 1
+            base = (ramp / window_period) * bdp * 0.6
+            bif  = base + rng.gauss(0, base * 0.12 + 300)
         else:
-            bif = 8000 + rng.gauss(0, 200)
+            # BBR: rate-paced, near-constant BIF at ~1 BDP
+            base = bdp * 0.9
+            bif  = base + rng.gauss(0, base * 0.02 + 150)
         bif_vals.append(max(0.0, bif))
 
     for bif in bif_vals:
@@ -375,73 +390,14 @@ def simulate_bif_stream(flow_key, pattern='cubic', seed=42):
     return bif_vals
 
 
-def run_metrics_demo():
-    """Demonstrate metric computations with synthetic data."""
-    print("\n" + "=" * 60)
-    print("  Metrics Demo — Baseline vs P4CCI")
-    print("=" * 60)
-
-    # Baseline: CUBIC gets starved, BBR dominates
-    baseline_flows_mbps = [7.3, 14.2]             # CUBIC starved, BBR dominant
-    baseline_timeseries = {
-        'CUBIC': [22.4, 25.6, 20.6, 7.8, 7.3, 7.1, 14.5, 0.0, 15.1, 7.3],
-        'BBR':   [5.9, 18.0, 20.3, 11.3, 11.1, 11.3, 11.3, 11.1, 11.3, 11.3],
-    }
-    baseline_metrics = print_metrics_table(
-        'Baseline (No Separation)',
-        baseline_flows_mbps,
-        baseline_timeseries,
-        link_capacity_mbps=1000.0,
-        drop_ratio=0.0216,
-    )
-
-    # P4CCI: flows separated into queues, both get fair share
-    p4cci_flows_mbps = [475.0, 480.0]             # near-equal share of 1Gbps
-    p4cci_timeseries = {
-        'CUBIC (Q1)': [470, 480, 475, 478, 472, 476, 479, 481, 474, 477],
-        'BBR (Q2)':   [478, 476, 480, 482, 475, 479, 477, 480, 476, 482],
-    }
-    p4cci_metrics = print_metrics_table(
-        'P4CCI (CCA-Aware Separation)',
-        p4cci_flows_mbps,
-        p4cci_timeseries,
-        link_capacity_mbps=1000.0,
-        drop_ratio=0.0001,
-    )
-
-    # Comparison
-    print("\n" + "-" * 55)
-    print("  Comparison Summary")
-    print("-" * 55)
-    print(f"  {'Metric':<30} {'Baseline':>10}  {'P4CCI':>10}")
-    print(f"  {'-'*30} {'-'*10}  {'-'*10}")
-    print(f"  {'Jain Fairness Index':<30} {baseline_metrics['jfi']:>10.4f}  {p4cci_metrics['jfi']:>10.4f}")
-    print(f"  {'Link Efficiency (%)':<30} {baseline_metrics['utilization']*100:>9.1f}%  {p4cci_metrics['utilization']*100:>9.1f}%")
-    print(f"  {'Starvation Count':<30} {baseline_metrics['starvation']:>10}  {p4cci_metrics['starvation']:>10}")
-    print(f"  {'Packet Drop Ratio (%)':<30} {baseline_metrics['drop_ratio']*100:>9.4f}%  {p4cci_metrics['drop_ratio']*100:>9.4f}%")
-    print(f"  {'Throughput Deviation':<30} {baseline_metrics['deviation']:>10.4f}  {p4cci_metrics['deviation']:>10.4f}")
-    print("-" * 55)
-    delta_jfi  = p4cci_metrics['jfi'] - baseline_metrics['jfi']
-    delta_util = (p4cci_metrics['utilization'] - baseline_metrics['utilization']) * 100
-    delta_starv = baseline_metrics['starvation'] - p4cci_metrics['starvation']
-    delta_drop = (baseline_metrics['drop_ratio'] - p4cci_metrics['drop_ratio']) * 100
-    print(f"  JFI improvement   : +{delta_jfi:.4f}")
-    print(f"  Utilization gain  : +{delta_util:.1f}%")
-    print(f"  Starvation reduc. : +{delta_starv}")
-    print(f"  Drop Ratio reduc. : +{delta_drop:.4f}%")
-    print("-" * 55)
-
-
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='P4CCI Controller — Self-Test & Metrics')
-    parser.add_argument('--demo-metrics', action='store_true',
-                        help='Run metrics demonstration with synthetic data')
+    parser = argparse.ArgumentParser(description='P4CCI Controller -- Self-Test')
     parser.add_argument('--classify-only', action='store_true',
-                        help='Only run flow classification self-test')
+                        help='Only run flow classification self-test (no metrics)')
     args = parser.parse_args()
 
     print("=" * 60)
-    print("P4CCI Controller — Baseline Self-Test")
+    print("P4CCI Controller -- Classification Self-Test")
     print("=" * 60)
     print(f"Python version  : {sys.version.split()[0]}")
     classifier_mode = "FCN (PyTorch)" if FCN_MODEL is not None else "CV Heuristic (fallback)"
@@ -449,21 +405,19 @@ if __name__ == '__main__':
     print(f"Sequence length : L={SEQ_LENGTH} BIF samples")
     print()
 
-    if not args.demo_metrics:
-        # Experiment 1: CUBIC-like flow
-        cubic_flow = ('10.0.1.1', '10.0.2.1', 5001, 80)
-        simulate_bif_stream(cubic_flow, pattern='cubic')
+    # Experiment 1: CUBIC-like flow
+    cubic_flow = ('10.0.1.1', '10.0.2.1', 5001, 80)
+    simulate_bif_stream(cubic_flow, pattern='cubic')
 
-        # Experiment 2: BBR-like flow
-        bbr_flow = ('10.0.1.2', '10.0.2.2', 5002, 80)
-        simulate_bif_stream(bbr_flow, pattern='bbr')
+    # Experiment 2: BBR-like flow
+    bbr_flow = ('10.0.1.2', '10.0.2.2', 5002, 80)
+    simulate_bif_stream(bbr_flow, pattern='bbr')
 
-        # Experiment 3: Reno-like flow
-        reno_flow = ('10.0.1.3', '10.0.2.3', 5003, 80)
-        simulate_bif_stream(reno_flow, pattern='reno')
+    # Experiment 3: Reno-like flow
+    reno_flow = ('10.0.1.3', '10.0.2.3', 5003, 80)
+    simulate_bif_stream(reno_flow, pattern='reno')
 
-        print("\n[+] Self-test complete.")
-        print("    Expected: CUBIC/Reno -> Loss-based, BBR -> Model-based")
+    print("\n[+] Self-test complete.")
+    print("    Expected: CUBIC/Reno -> Loss-based, BBR -> Model-based")
+    print("\n    To evaluate real experiments, use evaluate.py with iperf3 logs.")
 
-    if args.demo_metrics or not args.classify_only:
-        run_metrics_demo()

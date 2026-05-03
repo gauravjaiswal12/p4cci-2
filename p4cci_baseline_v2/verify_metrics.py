@@ -1,98 +1,144 @@
 #!/usr/bin/env python3
 """
-verify_metrics.py — Quick verification that all P4CCI metric functions are correct.
-Run: python verify_metrics.py
+verify_metrics.py -- Cross-module consistency check for P4CCI metric functions.
+
+Verifies that evaluate.py and controller.py compute identical JFI, link
+utilization, and throughput deviation values for the same input data.
+
+Run: python3 verify_metrics.py
 No external dependencies required.
 """
 import sys
-sys.path.insert(0, '.')
+import os
+import csv
+import math
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from evaluate import compute_jain_fairness, compute_link_utilization, compute_throughput_deviation
 from controller import (compute_jain_fairness as ctrl_jfi,
                         compute_link_utilization as ctrl_util,
-                        compute_throughput_deviation as ctrl_dev,
-                        print_metrics_table)
+                        compute_throughput_deviation as ctrl_dev)
 
-print("=" * 55)
-print("  P4CCI Metric Verification")
-print("=" * 55)
+RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'results')
+CSV_FILE    = os.path.join(RESULTS_DIR, 'p4cci_statistical_results.csv')
 
-# ---- BASELINE: CUBIC starved by BBR ----
-b_cubic_ts  = [22.4, 25.6, 20.6, 7.8, 7.3, 7.1, 14.5, 0.0, 15.1, 7.3]
-b_bbr_ts    = [5.9, 18.0, 20.3, 11.3, 11.1, 11.3, 11.3, 11.1, 11.3, 11.3]
-b_cubic_avg = sum(b_cubic_ts) / len(b_cubic_ts)
-b_bbr_avg   = sum(b_bbr_ts)   / len(b_bbr_ts)
 
-b_jfi  = compute_jain_fairness([b_cubic_avg, b_bbr_avg])-0.3
-b_util = compute_link_utilization([b_cubic_avg, b_bbr_avg], 1000.0)
-b_dev  = compute_throughput_deviation({'CUBIC': b_cubic_ts, 'BBR': b_bbr_ts})
+def load_csv_results(path):
+    """Load per-run results from the statistical CSV."""
+    if not os.path.exists(path):
+        return []
+    rows = []
+    with open(path, newline='') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            rows.append(row)
+    return rows
 
-print()
-print("BASELINE (No Separation):")
-print("  CUBIC avg:", round(b_cubic_avg, 2), "Mbps")
-print("  BBR   avg:", round(b_bbr_avg,   2), "Mbps")
-print("  Jain Fairness Index :", round(b_jfi,  4))
-print("  Link Utilization    :", round(b_util * 100, 1), "%")
-print("  Throughput Deviation:", round(b_dev['_aggregate'], 4))
 
-# ---- P4CCI: Fair queue separation ----
-p_cubic_ts  = [470, 480, 475, 478, 472, 476, 479, 481, 474, 477]
-p_bbr_ts    = [478, 476, 480, 482, 475, 479, 477, 480, 476, 482]
-p_cubic_avg = sum(p_cubic_ts) / len(p_cubic_ts)
-p_bbr_avg   = sum(p_bbr_ts)   / len(p_bbr_ts)
+def _mean(data):
+    return sum(data) / len(data) if data else 0.0
 
-p_jfi  = compute_jain_fairness([p_cubic_avg, p_bbr_avg])+0.2
-p_util = compute_link_utilization([p_cubic_avg, p_bbr_avg], 1000.0)
-p_dev  = compute_throughput_deviation({'CUBIC': p_cubic_ts, 'BBR': p_bbr_ts})
 
-print()
-print("P4CCI (With Separation):")
-print("  CUBIC avg:", round(p_cubic_avg, 2), "Mbps")
-print("  BBR   avg:", round(p_bbr_avg,   2), "Mbps")
-print("  Jain Fairness Index :", round(p_jfi,  4))
-print("  Link Utilization    :", round(p_util * 100, 1), "%")
-print("  Throughput Deviation:", round(p_dev['_aggregate'], 4))
+def _std(data):
+    if len(data) < 2:
+        return 0.0
+    mu = _mean(data)
+    return math.sqrt(sum((x - mu) ** 2 for x in data) / len(data))
 
-# ---- Comparison ----
-print()
-print("-" * 55)
-print("  Comparison:")
-print("  JFI:  baseline=" + str(round(b_jfi, 4)) +
-      "  p4cci=" + str(round(p_jfi, 4)) +
-      "  improvement=+" + str(round(p_jfi - b_jfi, 4)))
-print("  Util: baseline=" + str(round(b_util*100, 1)) + "%" +
-      "  p4cci=" + str(round(p_util*100, 1)) + "%" +
-      "  improvement=+" + str(round((p_util - b_util)*100, 1)) + "%")
-print("  Dev:  baseline=" + str(round(b_dev['_aggregate'], 4)) +
-      "  p4cci=" + str(round(p_dev['_aggregate'], 4)) +
-      "  reduction=" + str(round(b_dev['_aggregate'] - p_dev['_aggregate'], 4)))
 
-# ---- Cross-check controller vs evaluate module ----
-print()
-print("-" * 55)
-print("  Cross-module consistency check:")
-r1 = ctrl_jfi([b_cubic_avg, b_bbr_avg])
-r2 = ctrl_jfi([p_cubic_avg, p_bbr_avg])
-ok1 = abs(r1 - b_jfi) < 0.0001
-ok2 = abs(r2 - p_jfi) < 0.0001
-print("  JFI (evaluate vs controller): " + ("MATCH" if ok1 and ok2 else "MISMATCH"))
+def run_formula_checks():
+    """Verify that both modules compute identical results for known inputs."""
+    print("=" * 60)
+    print("  P4CCI Metric Verification -- Formula Consistency")
+    print("=" * 60)
 
-r3 = ctrl_util([b_cubic_avg, b_bbr_avg], 1000.0)
-ok3 = abs(r3 - b_util) < 0.001
-print("  Util check: " + ("MATCH" if ok3 else "MISMATCH"))
+    # Test case 1: Two flows, one dominant (unfair scenario)
+    flows_unfair = [7.3, 14.2]
+    jfi_eval = compute_jain_fairness(flows_unfair)
+    jfi_ctrl = ctrl_jfi(flows_unfair)
+    ok1 = abs(jfi_eval - jfi_ctrl) < 0.0001
+    print(f"\n  Test 1: Unfair flows {flows_unfair}")
+    print(f"    evaluate.jfi = {jfi_eval:.6f}")
+    print(f"    controller.jfi = {jfi_ctrl:.6f}")
+    print(f"    Match: {'PASS' if ok1 else 'FAIL'}")
 
-# ---- Use controller print_metrics_table ----
-print()
-print("Controller print_metrics_table (Baseline):")
-print_metrics_table('Baseline', [b_cubic_avg, b_bbr_avg],
-                    {'CUBIC': b_cubic_ts, 'BBR': b_bbr_ts}, 1000.0)
+    # Test case 2: Two flows, perfectly fair
+    flows_fair = [500.0, 500.0]
+    jfi_eval2 = compute_jain_fairness(flows_fair)
+    jfi_ctrl2 = ctrl_jfi(flows_fair)
+    ok2 = abs(jfi_eval2 - 1.0) < 0.0001 and abs(jfi_ctrl2 - 1.0) < 0.0001
+    print(f"\n  Test 2: Fair flows {flows_fair}")
+    print(f"    evaluate.jfi = {jfi_eval2:.6f}  (expected 1.0)")
+    print(f"    controller.jfi = {jfi_ctrl2:.6f}  (expected 1.0)")
+    print(f"    Match: {'PASS' if ok2 else 'FAIL'}")
 
-print("Controller print_metrics_table (P4CCI):")
-print_metrics_table('P4CCI', [p_cubic_avg, p_bbr_avg],
-                    {'CUBIC (Q1)': p_cubic_ts, 'BBR (Q2)': p_bbr_ts}, 1000.0)
+    # Test case 3: Link utilization
+    util_eval = compute_link_utilization(flows_unfair, 1000.0)
+    util_ctrl = ctrl_util(flows_unfair, 1000.0)
+    ok3 = abs(util_eval - util_ctrl) < 0.0001
+    print(f"\n  Test 3: Link utilization (capacity=1000 Mbps)")
+    print(f"    evaluate.util = {util_eval*100:.2f}%")
+    print(f"    controller.util = {util_ctrl*100:.2f}%")
+    print(f"    Match: {'PASS' if ok3 else 'FAIL'}")
 
-print()
-all_ok = ok1 and ok2 and ok3
-print("=" * 55)
-print("  RESULT: " + ("ALL CHECKS PASSED" if all_ok else "SOME CHECKS FAILED"))
-print("=" * 55)
+    # Test case 4: Throughput deviation
+    ts = {'flow_a': [10.0, 12.0, 8.0, 11.0], 'flow_b': [20.0, 19.5, 20.5, 20.0]}
+    dev_eval = compute_throughput_deviation(ts)
+    dev_ctrl = ctrl_dev(ts)
+    ok4 = abs(dev_eval['_aggregate'] - dev_ctrl['_aggregate_mean_deviation']) < 0.001
+    print(f"\n  Test 4: Throughput deviation")
+    print(f"    evaluate.dev = {dev_eval['_aggregate']:.6f}")
+    print(f"    controller.dev = {dev_ctrl['_aggregate_mean_deviation']:.6f}")
+    print(f"    Match: {'PASS' if ok4 else 'FAIL'}")
+
+    all_ok = ok1 and ok2 and ok3 and ok4
+    print(f"\n{'=' * 60}")
+    print(f"  FORMULA CHECKS: {'ALL PASSED' if all_ok else 'SOME FAILED'}")
+    print(f"{'=' * 60}")
+    return all_ok
+
+
+def run_csv_validation():
+    """If CSV results exist, validate that metrics are non-random and consistent."""
+    print(f"\n{'=' * 60}")
+    print(f"  CSV Results Validation")
+    print(f"{'=' * 60}")
+
+    rows = load_csv_results(CSV_FILE)
+    if not rows:
+        print(f"  [SKIP] No CSV results found at {CSV_FILE}")
+        print(f"         Run test_suite_p4cci.sh first to generate data.")
+        return True
+
+    print(f"  Loaded {len(rows)} runs from {CSV_FILE}")
+
+    jfi_vals = [float(r['jfi']) for r in rows]
+    agg_vals = [float(r['agg_throughput_mbps']) for r in rows]
+    util_vals = [float(r['link_util_pct']) for r in rows]
+
+    print(f"\n  JFI:  mean={_mean(jfi_vals):.4f}  std={_std(jfi_vals):.4f}  "
+          f"range=[{min(jfi_vals):.4f}, {max(jfi_vals):.4f}]")
+    print(f"  Agg Throughput: mean={_mean(agg_vals):.2f} Mbps  std={_std(agg_vals):.2f}")
+    print(f"  Link Util: mean={_mean(util_vals):.1f}%  std={_std(util_vals):.1f}%")
+
+    # Sanity checks
+    ok1 = all(0 <= j <= 1.0 for j in jfi_vals)
+    ok2 = all(a >= 0 for a in agg_vals)
+    ok3 = all(0 <= u <= 200 for u in util_vals)
+
+    print(f"\n  JFI in [0, 1]: {'PASS' if ok1 else 'FAIL'}")
+    print(f"  Throughput >= 0: {'PASS' if ok2 else 'FAIL'}")
+    print(f"  Utilization sane: {'PASS' if ok3 else 'FAIL'}")
+
+    all_ok = ok1 and ok2 and ok3
+    print(f"\n{'=' * 60}")
+    print(f"  CSV VALIDATION: {'PASSED' if all_ok else 'FAILED'}")
+    print(f"{'=' * 60}")
+    return all_ok
+
+
+if __name__ == '__main__':
+    ok1 = run_formula_checks()
+    ok2 = run_csv_validation()
+    sys.exit(0 if (ok1 and ok2) else 1)

@@ -39,6 +39,58 @@ from mininet.link import TCLink
 from p4_mininet import P4Switch, P4Host
 
 
+from p4_mininet import P4Switch, P4Host
+
+
+# ── P4Switch with priority queues ──────────────────────────────────────────────
+# BMv2 requires --priority-queues AFTER the '--' separator:
+#   simple_switch -i ... --thrift-port ... JSON -- --priority-queues 3
+# This matches how tutorials/p4_mininet.py line 134 does it for KBCS.
+# Without this, standard_metadata.priority has no effect (only 1 queue per port).
+
+class P4SwitchPQ(P4Switch):
+    """P4Switch with --priority-queues 3 for CCA-aware traffic separation."""
+    def start(self, controllers):
+        """Override start() to inject '-- --priority-queues 3' into the command."""
+        import tempfile
+        from mininet.log import info, debug, error
+        from sys import exit
+        import os
+
+        info("Starting P4 switch %s.\n" % self.name)
+        args = [self.sw_path]
+        for port, intf in self.intfs.items():
+            if not intf.IP():
+                args.extend(['-i', str(port) + "@" + intf.name])
+        if self.pcap_dump:
+            args.append("--pcap")
+        if self.thrift_port:
+            args.extend(['--thrift-port', str(self.thrift_port)])
+        if self.nanomsg:
+            args.extend(['--nanolog', self.nanomsg])
+        args.extend(['--device-id', str(self.device_id)])
+        P4Switch.device_id += 1
+        args.append(self.json_path)
+        # ── KEY: priority queues AFTER '--' separator (BMv2 target option) ──
+        args.extend(['--', '--priority-queues', '3'])
+        if self.enable_debugger:
+            args.append("--debugger")
+        if self.log_console:
+            args.append("--log-console")
+        logfile = "/tmp/p4s.%s.log" % self.name
+        info(' '.join(args) + "\n")
+
+        pid = None
+        with tempfile.NamedTemporaryFile() as f:
+            self.cmd(' '.join(args) + ' >' + logfile + ' 2>&1 & echo $! >> ' + f.name)
+            pid = int(f.read())
+        debug("P4 switch %s PID is %d.\n" % (self.name, pid))
+        if not self.check_switch_started(pid):
+            error("P4 switch %s did not start correctly.\n" % self.name)
+            exit(1)
+        info("P4 switch %s has been started.\n" % self.name)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Topology
 # ─────────────────────────────────────────────────────────────────────────────
@@ -58,11 +110,14 @@ class P4CCITopo(Topo):
                  priority_queues=3, **opts):
         Topo.__init__(self, **opts)
 
+        # --priority-queues 3 enables Q0(short), Q1(loss-based), Q2(model-based)
+        # Passed via P4SwitchPQ subclass with correct '-- --priority-queues 3' syntax.
         s1 = self.addSwitch('s1',
                             sw_path=sw_path,
                             json_path=json_path,
                             thrift_port=thrift_port,
-                            pcap_dump=False)
+                            pcap_dump=False,
+                            cls=P4SwitchPQ)
 
         h1 = self.addHost('h1', ip='10.0.0.1/24', mac='00:00:00:00:00:01')
         h2 = self.addHost('h2', ip='10.0.0.2/24', mac='00:00:00:00:00:02')

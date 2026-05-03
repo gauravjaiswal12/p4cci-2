@@ -1,63 +1,122 @@
 #!/usr/bin/env python3
 """
-topology_4flow.py — Self-contained 4-flow P4CCI evaluation topology.
+P4CCI 4-flow Dumbbell Topology  (2-switch, shared bottleneck)
+─────────────────────────────────────────────────────────────
+Mirrors the KBCS dumbbell design so that results are directly comparable.
 
-This script handles EVERYTHING in one process:
-  1. Start Mininet with 4 senders + 4 receivers
-  2. Install forwarding rules via simple_switch_CLI
-  3. Apply BMv2 queue rate limiting (250 pps ≈ 3 Mbps)
-  4. Start iperf servers and clients
-  5. Wait for iperf to fully complete
-  6. Stop Mininet and exit
+  h1(cubic)  ──┐                         ┌── h5 (receiver)
+  h2(bbr)    ──┼── s1 ──(bottleneck)── s2 ──┼── h6 (receiver)
+  h3(vegas)  ──┤       3 Mbps link       ├── h7 (receiver)
+  h4(illinois)─┘                         └── h8 (receiver)
 
-Topology:
-    h1 (CUBIC) ──┐                       ┌── h5 (Receiver 1)
-    h2 (BBR)   ──┤                       ├── h6 (Receiver 2)
-    h3 (CUBIC) ──┼── [s1: P4Switch] ──── ┼── h7 (Receiver 3)
-    h4 (BBR)   ──┘                       └── h8 (Receiver 4)
-
-Run:
-    sudo python3 topology_4flow.py --mode p4cci --duration 60 --log-dir logs/run_1
+ALL four flows share port 5 on s1, creating real congestion.
+In P4CCI mode, flows are classified and assigned to priority queues
+on that shared port.  In baseline mode, they share FIFO (queue 0).
 """
 
-import sys, os, argparse
+import os, sys, argparse, tempfile
 from time import sleep
 
+from mininet.net import Mininet
+from mininet.topo import Topo
+from mininet.log import setLogLevel, info, debug, error
+from mininet.link import TCLink
+from mininet.cli import CLI
+
+# ---------- P4 imports (absolute VM paths) ----------
 sys.path.insert(0, '/home/p4/tutorials/utils')
 sys.path.insert(0, '/home/p4/src/behavioral-model/mininet')
 sys.path.insert(0, '/home/p4/src/mininet')
 
-from mininet.net import Mininet
-from mininet.topo import Topo
-from mininet.log import setLogLevel, info
-from mininet.link import TCLink
 from p4_mininet import P4Switch, P4Host
 
 
+# ── P4SwitchPQ: adds '--priority-queues 3' after the BMv2 target separator ───
+
+class P4SwitchPQ(P4Switch):
+    """P4Switch subclass that injects '-- --priority-queues 3'."""
+
+    def start(self, controllers):
+        """Start with priority-queue support (BMv2 target option)."""
+        info("Starting P4 switch %s.\n" % self.name)
+        args = [self.sw_path]
+        for port, intf in self.intfs.items():
+            if not intf.IP():
+                args.extend(['-i', str(port) + '@' + intf.name])
+        if self.pcap_dump:
+            args.append("--pcap")
+        if self.thrift_port:
+            args.extend(['--thrift-port', str(self.thrift_port)])
+        if self.nanomsg:
+            args.extend(['--nanolog', self.nanomsg])
+        args.extend(['--device-id', str(self.device_id)])
+        P4Switch.device_id += 1
+        args.append(self.json_path)
+        # ── KEY: priority queues AFTER '--' separator (BMv2 target option) ──
+        args.extend(['--', '--priority-queues', '3'])
+        if self.enable_debugger:
+            args.append("--debugger")
+        if self.log_console:
+            args.append("--log-console")
+        logfile = "/tmp/p4s.%s.log" % self.name
+        info(' '.join(args) + "\n")
+
+        pid = None
+        with tempfile.NamedTemporaryFile() as f:
+            self.cmd(' '.join(args) + ' >' + logfile + ' 2>&1 & echo $! >> ' + f.name)
+            pid = int(f.read())
+        debug("P4 switch %s PID is %d.\n" % (self.name, pid))
+        if not self.check_switch_started(pid):
+            error("P4 switch %s did not start correctly.\n" % self.name)
+            exit(1)
+        info("P4 switch %s has been started.\n" % self.name)
+
+
 # ── Topology ───────────────────────────────────────────────────────────────────
+#
+#   h1 ─ s1:p1          s2:p1 ─ h5
+#   h2 ─ s1:p2          s2:p2 ─ h6
+#   h3 ─ s1:p3   s1:p5──s2:p5   s2:p3 ─ h7
+#   h4 ─ s1:p4  (bottleneck)    s2:p4 ─ h8
+#
 
 class P4CCI4FlowTopo(Topo):
     def __init__(self, sw_path, json_path, thrift_port=9090, **opts):
         Topo.__init__(self, **opts)
 
+        # Switch 1 (sender side) — thrift port 9090
         s1 = self.addSwitch('s1',
                             sw_path=sw_path,
                             json_path=json_path,
                             thrift_port=thrift_port,
-                            pcap_dump=False)
+                            pcap_dump=False,
+                            cls=P4SwitchPQ)
 
+        # Switch 2 (receiver side) — thrift port 9091
+        s2 = self.addSwitch('s2',
+                            sw_path=sw_path,
+                            json_path=json_path,
+                            thrift_port=thrift_port + 1,
+                            pcap_dump=False,
+                            cls=P4SwitchPQ)
+
+        # 8 hosts
         for i in range(1, 9):
             self.addHost(f'h{i}', ip=f'10.0.0.{i}/24',
                          mac=f'00:00:00:00:00:0{i}')
 
-        # Sender links (ports 1-4)
+        # Sender links: h1-h4 ──> s1 ports 1-4
         for i in range(1, 5):
             self.addLink(f'h{i}', 's1', delay='5ms')
 
-        # Receiver links (ports 5-8), with queue buffer
+        # Receiver links: h5-h8 ──> s2 ports 1-4  (added FIRST so they get ports 1-4)
         for i in range(5, 9):
-            self.addLink('s1', f'h{i}', delay='5ms',
-                         max_queue_size=200, cls=TCLink)
+            self.addLink(f'h{i}', 's2', delay='5ms')
+
+        # Bottleneck link: s1:p5 ──> s2:p5  (shared by ALL 4 flows)
+        # Added LAST so both switches assign it to port 5.
+        self.addLink('s1', 's2', delay='5ms',
+                     max_queue_size=200, cls=TCLink)
 
 
 # ── Host setup ─────────────────────────────────────────────────────────────────
@@ -91,79 +150,110 @@ def configure_hosts(net):
     h2.cmd('sysctl -w net.ipv4.tcp_congestion_control=bbr')
     info('[CCA] h2: bbr (Model-based)\n')
 
-    # h3: VEGAS
+    # h3: VEGAS (delay-based -- classified as Loss-based per paper Section III-F,
+    # since the paper only defines two classes: Loss-based and Model-based(BBR))
     h3 = net.get('h3')
     h3.cmd('modprobe tcp_vegas 2>/dev/null')
     h3.cmd('sysctl -w net.ipv4.tcp_congestion_control=vegas')
-    info('[CCA] h3: vegas (Delay-based)\n')
+    info('[CCA] h3: vegas (Loss-based queue -- delay-based CCA)\n')
 
-    # h4: ILLINOIS
+    # h4: ILLINOIS (loss-based)
     h4 = net.get('h4')
     h4.cmd('modprobe tcp_illinois 2>/dev/null')
     h4.cmd('sysctl -w net.ipv4.tcp_congestion_control=illinois')
-    info('[CCA] h4: illinois (Loss-based)\n')
+    info('[CCA] h4: illinois (Loss-based queue)\n')
 
 
 # ── Switch configuration ──────────────────────────────────────────────────────
 
-def install_rules(thrift_port, mode):
-    """Install forwarding rules and (optionally) queue assignment via CLI."""
+def install_rules(thrift_s1, thrift_s2, mode):
+    """Install forwarding rules on BOTH switches."""
     info('*** Installing P4 switch rules...\n')
 
-    rules = []
-    # L3 forwarding for all 8 hosts
-    for i in range(1, 9):
-        rules.append(
+    # ── S1 forwarding rules ──
+    # Hosts h1-h4 are directly attached to s1 ports 1-4.
+    # Hosts h5-h8 are reachable via the bottleneck link on port 5.
+    s1_rules = []
+    for i in range(1, 5):
+        s1_rules.append(
             f'table_add ipv4_lpm ipv4_forward 10.0.0.{i}/32 => '
             f'00:00:00:00:00:0{i} {i}'
         )
+    for i in range(5, 9):
+        # All receiver-bound traffic goes out port 5 (the shared bottleneck)
+        s1_rules.append(
+            f'table_add ipv4_lpm ipv4_forward 10.0.0.{i}/32 => '
+            f'00:00:00:00:00:0{i} 5'
+        )
 
+    # ── S2 forwarding rules ──
+    # Port mapping: h5=s2:p1, h6=s2:p2, h7=s2:p3, h8=s2:p4, bottleneck=s2:p5
+    s2_rules = []
+    for i, port in [(5, 1), (6, 2), (7, 3), (8, 4)]:
+        s2_rules.append(
+            f'table_add ipv4_lpm ipv4_forward 10.0.0.{i}/32 => '
+            f'00:00:00:00:00:0{i} {port}'
+        )
+    for i in range(1, 5):
+        # Return traffic (ACKs) goes back through port 5 (bottleneck)
+        s2_rules.append(
+            f'table_add ipv4_lpm ipv4_forward 10.0.0.{i}/32 => '
+            f'00:00:00:00:00:0{i} 5'
+        )
+
+    # ── P4CCI mode: add CCA classification + queue assignment on S1 ──
     if mode == 'p4cci':
-        # Queue assignment table (class → priority queue)
-        rules.append('table_add queue_assignment assign_to_queue 0 => 0')
-        rules.append('table_add queue_assignment assign_to_queue 1 => 1')
-        rules.append('table_add queue_assignment assign_to_queue 2 => 2')
+        # Queue assignment table (class -> priority queue)
+        s1_rules.append('table_add queue_assignment assign_to_queue 0 => 0')
+        s1_rules.append('table_add queue_assignment assign_to_queue 1 => 1')
+        s1_rules.append('table_add queue_assignment assign_to_queue 2 => 2')
 
-        # CCA classification — ternary match syntax (no spaces around &&&):
-        # table_add <table> <action> <key1> <key2> <key3> <key4> => <action_data> <priority>
-        #
+        # CCA classification - ternary match: srcIP dstIP srcPort dstPort
         # CUBIC (h1) -> class 1 (Loss-based)
-        rules.append(
+        s1_rules.append(
             'table_add cca_classification set_cca_class '
             '10.0.0.1&&&0xffffffff 10.0.0.5&&&0xffffffff '
             '0&&&0 5001&&&0xffff => 1 10'
         )
         # BBR (h2) -> class 2 (Model-based)
-        rules.append(
+        s1_rules.append(
             'table_add cca_classification set_cca_class '
             '10.0.0.2&&&0xffffffff 10.0.0.6&&&0xffffffff '
             '0&&&0 5002&&&0xffff => 2 20'
         )
-        # VEGAS (h3) -> class 2 (Delay-based)
-        rules.append(
+        # VEGAS (h3) -> class 1 (Loss-based queue)
+        s1_rules.append(
             'table_add cca_classification set_cca_class '
             '10.0.0.3&&&0xffffffff 10.0.0.7&&&0xffffffff '
-            '0&&&0 5003&&&0xffff => 2 30'
+            '0&&&0 5003&&&0xffff => 1 30'
         )
         # ILLINOIS (h4) -> class 1 (Loss-based)
-        rules.append(
+        s1_rules.append(
             'table_add cca_classification set_cca_class '
             '10.0.0.4&&&0xffffffff 10.0.0.8&&&0xffffffff '
             '0&&&0 5004&&&0xffff => 1 40'
         )
 
-    cli_input = '\n'.join(rules) + '\n'
-    cmd = f'echo "{cli_input}" | simple_switch_CLI --thrift-port {thrift_port}'
+    # Push rules to S1
+    cli_input = '\n'.join(s1_rules) + '\n'
+    cmd = f'echo "{cli_input}" | simple_switch_CLI --thrift-port {thrift_s1}'
     os.system(cmd)
 
-    # Apply rate limits on bottleneck (egress) ports 5-8
-    info('*** Applying queue rate limits (250 pps ≈ 3 Mbps)...\n')
-    for port in range(5, 9):
-        rl_cmd = f'echo "set_queue_rate 250 {port}" | simple_switch_CLI --thrift-port {thrift_port}'
-        os.system(rl_cmd + ' 2>/dev/null')
+    # Push rules to S2
+    cli_input = '\n'.join(s2_rules) + '\n'
+    cmd = f'echo "{cli_input}" | simple_switch_CLI --thrift-port {thrift_s2}'
+    os.system(cmd)
 
+    # ── Rate limit the bottleneck: s1 port 5 only ──
+    # This is the ONLY egress port that ALL 4 flows share.
+    # By setting the rate on the port (without specifying a queue), BMv2 limits
+    # the entire port to 250 pps (~3 Mbps). The priority queues (Q0, Q1, Q2) 
+    # will automatically compete for this shared 3 Mbps capacity.
+    info('*** Applying bottleneck rate limit on s1 port 5 (250 pps ~ 3 Mbps)...\n')
+    rl_cmd = f'echo "set_queue_rate 250 5" | simple_switch_CLI --thrift-port {thrift_s1}'
+    os.system(rl_cmd + ' 2>/dev/null')
+    
     info('*** Rules and rate limits installed.\n')
-
 
 # ── Traffic test ───────────────────────────────────────────────────────────────
 
@@ -254,8 +344,11 @@ def main():
         print('Compile: p4c --target bmv2 --arch v1model p4cci_switch.p4 -o build/')
         sys.exit(1)
 
+    thrift_s1 = args.thrift_port
+    thrift_s2 = args.thrift_port + 1
+
     topo = P4CCI4FlowTopo(sw_path=sw_path, json_path=json_path,
-                           thrift_port=args.thrift_port)
+                           thrift_port=thrift_s1)
 
     net = Mininet(topo=topo, host=P4Host, switch=P4Switch,
                   link=TCLink, controller=None)
@@ -263,7 +356,7 @@ def main():
     sleep(2)
 
     configure_hosts(net)
-    install_rules(args.thrift_port, args.mode)
+    install_rules(thrift_s1, thrift_s2, args.mode)
     sleep(2)
 
     info('\n*** Ping test...\n')

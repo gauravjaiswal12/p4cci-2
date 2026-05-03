@@ -1,203 +1,234 @@
 #!/usr/bin/env python3
 """
-collect_metrics.py — KBCS-style metric collector for P4CCI.
+collect_metrics.py -- Unified metric collector for P4CCI experiments.
 
-Parses per-flow iperf (v2) log files written by topology_4flow.py,
-then computes the same metrics as KBCS (kbcs_evaluation_reference.md §4):
+Parses per-flow iperf (v2) log files, computes metrics matching the KBCS v2
+CSV format (except karma fields), and appends one row per run.
 
-  - Throughput (Mbps) per flow
-  - Jain's Fairness Index (JFI)
-  - Packet Drop Ratio (PDR) — estimated from retransmissions
-  - Link Utilization (%)
+Metrics computed (same formulas as KBCS collect_metrics.py):
+  - Jain's Fairness Index (JFI)   J = (sum_x)^2 / (n * sum_x2)
+  - Aggregate Throughput (Mbps)
+  - Link Utilization (%)          agg_throughput / bottleneck_capacity
+  - Packet Drop Ratio (PDR %)     estimated from retransmissions
 
-Appends one CSV row to results/p4cci_statistical_results.csv per run.
+Topologies supported:
+  - dumbbell: 4 flows (h1-h4 -> h5-h8), bottleneck = 3 Mbps
+  - cross:    8 flows (h1-h8 -> h9-h12), bottleneck = 6 Mbps (2 x 3 Mbps links)
 
 Usage (called by test_suite_p4cci.sh):
-    python3 collect_metrics.py --run 1 --duration 60 --mode p4cci \\
-        --log-dir logs/run_1
+    python3 collect_metrics.py --run 1 --topo dumbbell --mode p4cci \\
+        --duration 60 --log-dir logs/run_1
 """
 
 import os
 import re
 import csv
-import random
 import argparse
 from datetime import datetime
 
-# ── Config ─────────────────────────────────────────────────────────────────────
-SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
-RESULTS_DIR   = os.path.join(SCRIPT_DIR, 'results')
-CSV_FILE      = os.path.join(RESULTS_DIR, 'p4cci_statistical_results.csv')
-LINK_CAPACITY = 3.0   # Mbps  (250 pps × 1500 B × 8 ≈ 3 Mbps)
+SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
+RESULTS_DIR = os.path.join(SCRIPT_DIR, 'results')
 
-CSV_HEADER = [
-    'run', 'timestamp', 'mode', 'duration_s', 'topology',
-    'jfi', 'agg_throughput_mbps', 'link_util_pct', 'pdr_pct',
-    'flow1_mbps', 'flow2_mbps', 'flow3_mbps', 'flow4_mbps',
-]
+# Bottleneck capacity (250 pps * 1500 B * 8 ~ 3 Mbps per link)
+CAPACITY_DUMBBELL = 3.0    # 1 bottleneck link
+CAPACITY_CROSS    = 6.0    # 2 bottleneck links per ingress switch
 
-# Log filenames written by topology_4flow.py (send_name + cca label)
-FLOW_LOGS = [
+# Flow definitions per topology
+DUMBBELL_FLOWS = [
     ('h1', 'cubic'),
     ('h2', 'bbr'),
-    ('h3', 'cubic'),
-    ('h4', 'bbr'),
+    ('h3', 'vegas'),
+    ('h4', 'illinois'),
+]
+
+CROSS_FLOWS = [
+    ('h1', 'cubic'),
+    ('h2', 'bbr'),
+    ('h3', 'vegas'),
+    ('h4', 'illinois'),
+    ('h5', 'cubic'),
+    ('h6', 'bbr'),
+    ('h7', 'vegas'),
+    ('h8', 'illinois'),
 ]
 
 
-# ── Metric math ────────────────────────────────────────────────────────────────
+# ---- Metric formulas (matching KBCS) ----------------------------------------
 
-def jain_fairness(throughputs):
-    """J = (Σxi)² / (n·Σxi²) — KBCS formula."""
-    active = [x for x in throughputs if x > 0]
+def jain_fairness(values):
+    """J = (sum_x)^2 / (n * sum_x^2)  --  same as KBCS collect_metrics.py."""
+    active = [x for x in values if x > 0]
     n = len(active)
     if n == 0:
         return 0.0
-    sx  = sum(active)
-    sx2 = sum(x ** 2 for x in active)
-    return (sx ** 2) / (n * sx2) if sx2 > 0 else 1.0
+    sum_x  = sum(active)
+    sum_x2 = sum(x * x for x in active)
+    return (sum_x ** 2) / (n * sum_x2) if sum_x2 > 0 else 1.0
 
 
-def packet_drop_ratio(retransmits, total_bytes, duration_s, throughput_mbps):
-    """
-    Approximate PDR from retransmissions (proxy for hardware drops).
-    PDR = (retx × 1500) / (fwd_bytes + retx × 1500) × 100
-    Matches KBCS formula (kbcs_evaluation_reference.md §4).
-    """
-    fwd_bytes  = (throughput_mbps * 1e6 * duration_s) / 8.0
+def packet_drop_ratio(retransmits, fwd_bytes):
+    """PDR = drop_bytes / (fwd_bytes + drop_bytes) * 100  --  matches KBCS."""
     drop_bytes = retransmits * 1500
-    total      = fwd_bytes + drop_bytes
+    total = fwd_bytes + drop_bytes
     return (drop_bytes / total * 100.0) if total > 0 else 0.0
 
 
-# ── iperf v2 log parser ────────────────────────────────────────────────────────
+# ---- iperf v2 log parser -----------------------------------------------------
 
 def parse_iperf_log(log_path):
     """
-    Parse iperf (v2) plain-text output.
-
+    Parse iperf v2 plain-text output.
     Returns (avg_mbps, retransmits).
+
     Example summary line:
       [  1]  0.0-60.0 sec  215 MBytes  30.1 Mbits/sec
     """
     if not os.path.exists(log_path):
-        print(f"    [!] Log not found: {log_path}")
         return 0.0, 0
 
     try:
         with open(log_path) as f:
             content = f.read()
-    except Exception as e:
-        print(f"    [!] Cannot read {log_path}: {e}")
+    except Exception:
         return 0.0, 0
 
     if not content.strip():
-        print(f"    [!] Log is empty: {log_path}")
         return 0.0, 0
 
-    # Print raw log for debugging (first 5 lines)
     lines = content.strip().splitlines()
-    for line in lines[:6]:
-        print(f"      | {line}")
 
     # Check for connection errors
     if 'Connection refused' in content and 'connected with' not in content:
-        print(f"    [!] iperf connection refused — server was not listening.")
         return 0.0, 0
 
-    # Find the summary line — last line with "Mbits/sec" or "Gbits/sec"
+    # Find throughput -- last line with "bits/sec"
     mbps = 0.0
     for line in reversed(lines):
-        m = re.search(r'([\d.]+)\s+(M|G)bits/sec', line)
+        m = re.search(r'([\d.]+)\s+(K|M|G)bits/sec', line)
         if m:
             val = float(m.group(1))
-            if m.group(2) == 'G':
-                val *= 1000.0
+            unit = m.group(2)
+            if unit == 'K':
+                val /= 1000.0     # Kbits -> Mbits
+            elif unit == 'G':
+                val *= 1000.0     # Gbits -> Mbits
             mbps = val
             break
 
-    # Estimate retransmits — iperf v2 doesn't report retx by default; use 0
+    # iperf v2 doesn't report retransmits by default
     retransmits = 0
 
     return mbps, retransmits
 
 
-# ── Main ────────────────────────────────────────────────────────────────────────
+# ---- Main collection logic ---------------------------------------------------
 
-def collect_and_write(run_num, duration_s, mode, log_dir, topology='dumbbell'):
-    print(f"\n[collect_metrics] Run {run_num} | mode={mode} | duration={duration_s}s")
-    print(f"  Log directory: {log_dir}")
+def collect_and_write(run_num, duration_s, mode, topo, log_dir):
+    """Parse logs, compute metrics, write CSV row."""
 
+    # Select flow list and capacity based on topology
+    if topo == 'cross':
+        flow_list = CROSS_FLOWS
+        capacity  = CAPACITY_CROSS
+    else:
+        flow_list = DUMBBELL_FLOWS
+        capacity  = CAPACITY_DUMBBELL
+
+    num_flows = len(flow_list)
+
+    # Determine CSV file path
+    csv_file = os.path.join(RESULTS_DIR, f'{mode}_{topo}_results.csv')
+
+    print(f'\n[collect_metrics] Run {run_num} | topo={topo} | mode={mode} | '
+          f'duration={duration_s}s | flows={num_flows}')
+    print(f'  Log directory: {log_dir}')
+    print(f'  CSV output:    {csv_file}')
+
+    # Parse each flow's iperf log
     flow_mbps  = []
-    total_retx = 0
+    flow_fwd   = []   # forwarded bytes (computed from throughput)
+    flow_drops = []   # retransmits (proxy for drops)
 
-    for send_name, cca in FLOW_LOGS:
+    for send_name, cca in flow_list:
         log_path = os.path.join(log_dir, f'{send_name}_{cca}.txt')
-        print(f"\n  Flow {send_name} ({cca.upper()})  ← {log_path}")
         mbps, retx = parse_iperf_log(log_path)
-        flow_mbps.append(round(random.uniform(0.75, 2.5), 2))
-        total_retx += retx
-        print(f"    → throughput: {mbps:.4f} Mbps  retransmits: {retx}")
 
-    # Pad to 4 flows
-    while len(flow_mbps) < 4:
-        flow_mbps.append(round(random.uniform(0.75, 2.5), 2))
+        # Compute forwarded bytes from throughput (same approach as reading registers)
+        fwd_bytes = int((mbps * 1e6 * duration_s) / 8.0)
 
+        flow_mbps.append(mbps)
+        flow_fwd.append(fwd_bytes)
+        flow_drops.append(retx)
+
+        status = 'OK' if mbps > 0 else 'MISSING'
+        print(f'  {send_name} ({cca:>8}): {mbps:>8.4f} Mbps  '
+              f'fwd={fwd_bytes:>12}  drops={retx:>4}  [{status}]')
+
+    # Compute aggregate metrics (matching KBCS formulas exactly)
     agg_mbps   = sum(flow_mbps)
-    jfi        = jain_fairness(flow_mbps)
-    pdr        = packet_drop_ratio(total_retx, 0, duration_s, agg_mbps)
-    link_util  = min(round(random.uniform(98, 99), 2), (agg_mbps / LINK_CAPACITY) * 100.0)
+    jfi        = jain_fairness(flow_fwd)   # JFI on bytes, same as KBCS
+    link_util  = min((agg_mbps / capacity) * 100.0, 100.0)
+    total_fwd  = sum(flow_fwd)
+    total_drops = sum(flow_drops)
+    pdr        = packet_drop_ratio(total_drops, total_fwd)
 
-    print(f"\n  ── Results ──────────────────────────────────────")
-    print(f"  Flow throughputs : {[round(x,2) for x in flow_mbps]} Mbps")
-    print(f"  JFI              : {jfi:.4f}  (1.0 = perfect)")
-    print(f"  Agg Throughput   : {agg_mbps:.4f} Mbps / {LINK_CAPACITY} Mbps capacity")
-    print(f"  Link Utilization : {link_util:.2f}%")
-    print(f"  Packet Drop Ratio: {round(random.uniform(2, 4), 2):.4f}%")
+    print(f'\n  -- Results --')
+    print(f'  JFI              : {jfi:.4f}')
+    print(f'  Agg Throughput   : {agg_mbps:.4f} Mbps')
+    print(f'  Link Utilization : {link_util:.2f}%')
+    print(f'  Packet Drop Ratio: {pdr:.4f}%')
 
+    # ---- Build CSV row (KBCS-compatible format) ----
+    row = {
+        'run':                run_num,
+        'topology':           topo,
+        'duration':           duration_s,
+        'num_flows':          num_flows,
+        'jfi':                round(jfi, 4),
+        'agg_throughput_mbps': round(agg_mbps, 4),
+        'link_util_pct':      round(link_util, 2),
+        'pdr_pct':            round(pdr, 4),
+    }
+
+    # Per-flow data (same column names as KBCS)
+    for i in range(num_flows):
+        row[f'fwd_{i+1}']   = flow_fwd[i]
+        row[f'drops_{i+1}'] = flow_drops[i]
+
+    # Write CSV
     os.makedirs(RESULTS_DIR, exist_ok=True)
-    write_header = not os.path.exists(CSV_FILE)
+    fieldnames = list(row.keys())
+    file_exists = os.path.exists(csv_file) and os.path.getsize(csv_file) > 0
 
-    with open(CSV_FILE, 'a', newline='') as f:
-        writer = csv.writer(f)
-        if write_header:
-            writer.writerow(CSV_HEADER)
-        writer.writerow([
-            run_num,
-            datetime.now().isoformat(timespec='seconds'),
-            mode,
-            duration_s,
-            topology,
-            round(jfi,       4),
-            round(agg_mbps,  4),
-            round(link_util, 2),
-            round(pdr,       4),
-            round(flow_mbps[0], 4),
-            round(flow_mbps[1], 4),
-            round(flow_mbps[2], 4),
-            round(flow_mbps[3], 4),
-        ])
+    with open(csv_file, 'a', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(row)
 
-    print(f"\n  Row appended to {CSV_FILE}")
+    print(f'\n  Row appended to {csv_file}')
+    return row
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--run',         type=int, required=True)
-    parser.add_argument('--duration',    type=int, default=60)
-    parser.add_argument('--mode',        type=str, default='p4cci',
+    parser = argparse.ArgumentParser(
+        description='P4CCI metric collector (KBCS-compatible format)')
+    parser.add_argument('--run',      type=int, required=True)
+    parser.add_argument('--topo',     type=str, required=True,
+                        choices=['dumbbell', 'cross'])
+    parser.add_argument('--mode',     type=str, default='p4cci',
                         choices=['baseline', 'p4cci'])
-    parser.add_argument('--log-dir',     type=str, required=True,
-                        help='Directory containing h1_cubic.txt, h2_bbr.txt, etc.')
-    parser.add_argument('--topology',    type=str, default='dumbbell')
+    parser.add_argument('--duration', type=int, default=60)
+    parser.add_argument('--log-dir',  type=str, required=True,
+                        help='Directory containing h1_cubic.txt, etc.')
     args = parser.parse_args()
 
     collect_and_write(
         run_num    = args.run,
         duration_s = args.duration,
         mode       = args.mode,
+        topo       = args.topo,
         log_dir    = args.log_dir,
-        topology   = args.topology,
     )
 
 
