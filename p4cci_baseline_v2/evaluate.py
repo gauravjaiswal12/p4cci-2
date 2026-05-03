@@ -1,11 +1,11 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
-evaluate.py — Standalone P4CCI metrics evaluator.
+evaluate.py - Standalone P4CCI metrics evaluator.
 
 Computes and reports:
-  1. Jain Fairness Index (JFI)         J = (Σxi)² / (n·Σxi²)
-  2. Link Utilization                  U = Σthroughput / link_capacity
-  3. Throughput Deviation              σ/μ per flow, averaged
+  1. Jain Fairness Index (JFI)         J = (Sumxi)Â² / (nÂ·SumxiÂ²)
+  2. Link Utilization                  U = Sumthroughput / link_capacity
+  3. Throughput Deviation              std/mean per flow, averaged
 
 Usage examples:
     # Demo with synthetic data (no logs required):
@@ -59,11 +59,11 @@ def _median(data):
 
 def compute_jain_fairness(throughputs):
     """
-    Jain's Fairness Index: J(x1,...,xn) = (Σxi)² / (n · Σxi²)
+    Jain's Fairness Index: J(x1,...,xn) = (Sumxi)Â² / (n Â· SumxiÂ²)
 
     Range: [1/n, 1.0] where 1.0 = perfect fairness.
-    Paper target (P4CCI with separation): JFI ≈ 0.99
-    Paper baseline (no separation):       JFI ≈ 0.70
+    Paper target (P4CCI with separation): JFI â‰ˆ 0.99
+    Paper baseline (no separation):       JFI â‰ˆ 0.70
 
     Args:
         throughputs: list of per-flow average throughput values (any unit, consistent)
@@ -80,10 +80,10 @@ def compute_jain_fairness(throughputs):
 
 def compute_link_utilization(throughputs, link_capacity_mbps=1000.0):
     """
-    Link Utilization: U = Σthroughput / link_capacity
+    Link Utilization: U = Sumthroughput / link_capacity
 
     Range: [0, 1] where 1.0 = 100% utilization.
-    Paper target (P4CCI): U ≈ 0.95 (95%)
+    Paper target (P4CCI): U â‰ˆ 0.95 (95%)
 
     Args:
         throughputs: list of per-flow Mbps values
@@ -96,7 +96,7 @@ def compute_link_utilization(throughputs, link_capacity_mbps=1000.0):
 
 def compute_throughput_deviation(timeseries_dict):
     """
-    Throughput Deviation: mean of (σ/μ) per flow across all time intervals.
+    Throughput Deviation: mean of (std/mean) per flow across all time intervals.
 
     Lower = more stable throughput (less oscillation).
     CUBIC under BBR competition has high deviation; after separation it drops.
@@ -124,6 +124,35 @@ def compute_throughput_deviation(timeseries_dict):
     return results
 
 
+def compute_starvation_count(throughputs, link_capacity_mbps=1000.0):
+    """
+    Starvation Count: Tracks flows receiving < 10% of their fair share.
+    """
+    n = len(throughputs)
+    if n == 0:
+        return 0
+    fair_share = link_capacity_mbps / n
+    threshold = 0.10 * fair_share
+    return sum(1 for t in throughputs if t < threshold)
+
+
+def compute_packet_drop_ratio(drops, total_packets):
+    """
+    Packet Drop Ratio: Drops / (Total Packets + Drops).
+    Normally computed from P4 egress pipeline registers. Here we use retransmissions as a proxy.
+    """
+    if total_packets + drops == 0:
+        return 0.0
+    return drops / (total_packets + drops)
+
+
+def compute_throughput_rates(forwarded_bytes_ts, interval_sec=1.0):
+    """
+    Throughput / Flow Rates (Mbps): Derived from forwarded_bytes telemetry register.
+    """
+    return [(b * 8) / (interval_sec * 1e6) for b in forwarded_bytes_ts]
+
+
 # -----------------------------------------------------------------------------
 # iperf3 log parsers
 # -----------------------------------------------------------------------------
@@ -133,9 +162,9 @@ def parse_iperf3_json(log_path):
     Parse iperf3 JSON output (generated with `iperf3 -J` flag).
 
     Returns:
-        avg_mbps: float — overall average throughput
-        intervals_mbps: list of float — per-interval throughput (Mbps)
-        retransmits: int — total retransmissions
+        avg_mbps: float - overall average throughput
+        intervals_mbps: list of float - per-interval throughput (Mbps)
+        retransmits: int - total retransmissions
     """
     try:
         with open(log_path) as f:
@@ -250,6 +279,14 @@ def print_scenario_report(scenario_name, flow_data, link_capacity_mbps=1000.0):
     jfi  = compute_jain_fairness(avg_mbps)
     util = compute_link_utilization(avg_mbps, link_capacity_mbps)
     dev  = compute_throughput_deviation(ts_dict)
+    starvation = compute_starvation_count(avg_mbps, link_capacity_mbps)
+    
+    # Estimate total packets for Drop Ratio calculation (assuming ~1500B MTU)
+    total_retx = sum(d['retx'] for d in flow_data.values())
+    duration_sec = len(list(ts_dict.values())[0]) * 5 if ts_dict and list(ts_dict.values())[0] else 60
+    total_bits = sum(avg_mbps) * 1e6 * duration_sec
+    estimated_total_packets = total_bits / (1500 * 8)
+    drop_ratio = compute_packet_drop_ratio(total_retx, estimated_total_packets)
 
     print(f"\n{'='*60}")
     print(f"  Scenario: {scenario_name}")
@@ -262,18 +299,20 @@ def print_scenario_report(scenario_name, flow_data, link_capacity_mbps=1000.0):
     total = sum(avg_mbps)
     print(f"  {'Total throughput':<20} {total:>8.2f} Mbps / {link_capacity_mbps:.0f} Mbps capacity")
     print(f"{'-'*60}")
-    print(f"  Jain Fairness Index  : {jfi:.4f}   {'[OK]' if jfi >= 0.95 else '[!]️ '} (target ≥ 0.95)")
-    print(f"  Link Utilization     : {util*100:.1f}%   {'[OK]' if util >= 0.90 else '[!]️ '} (target ≥ 90%)")
-    print(f"  Throughput Deviation : {dev['_aggregate']:.4f}   {'[OK]' if dev['_aggregate'] <= 0.15 else '[!]️ '} (target ≤ 0.15)")
+    print(f"  Jain Fairness Index  : {jfi:.4f}   {'[OK]' if jfi >= 0.95 else '[!] '} (target >= 0.95)")
+    print(f"  Link Efficiency/Util : {util*100:.1f}%   {'[OK]' if util >= 0.90 else '[!] '} (target >= 90%)")
+    print(f"  Starvation Count     : {starvation}      {'[OK]' if starvation == 0 else '[!] '} (target = 0)")
+    print(f"  Throughput Deviation : {dev['_aggregate']:.4f}   {'[OK]' if dev['_aggregate'] <= 0.15 else '[!] '} (target <= 0.15)")
+    print(f"  Packet Drop Ratio    : {drop_ratio*100:.4f}%")
     print()
-    print("  Per-flow throughput deviation (σ/μ):")
+    print("  Per-flow throughput deviation (std/mean):")
     for name, cov in dev.items():
         if name != '_aggregate':
             print(f"    {name:<20}: {cov:.4f}")
     print(f"{'='*60}")
 
     return {'jfi': jfi, 'utilization': util, 'deviation': dev['_aggregate'],
-            'total_mbps': total}
+            'total_mbps': total, 'starvation': starvation, 'drop_ratio': drop_ratio}
 
 
 def print_comparison(results):
@@ -296,14 +335,17 @@ def print_comparison(results):
 
     metrics = [
         ('Jain Fairness Index', 'jfi', '{:.4f}'),
-        ('Link Utilization (%)', 'utilization_pct', '{:.1f}%'),
+        ('Link Efficiency (%)', 'utilization_pct', '{:.1f}%'),
+        ('Starvation Count', 'starvation', '{:.0f}'),
+        ('Packet Drop Ratio (%)', 'drop_ratio_pct', '{:.4f}%'),
         ('Throughput Deviation', 'deviation', '{:.4f}'),
         ('Total Throughput (Mbps)', 'total_mbps', '{:.1f}'),
     ]
 
-    # Add utilization_pct view
+    # Add derived metrics views
     for k, v in results.items():
         v['utilization_pct'] = v['utilization'] * 100
+        v['drop_ratio_pct'] = v.get('drop_ratio', 0) * 100
 
     for label, key, fmt in metrics:
         print(f"  {label:<30}", end='')
@@ -320,11 +362,21 @@ def print_comparison(results):
         for label, key, _ in metrics:
             real_key = key.replace('_pct', '')
             dv = b.get(real_key, 0) - a.get(real_key, 0)
+            
+            # For starvation, drop ratio, and deviation, lower is better, so negate for 'improvement'
+            if real_key in ['starvation', 'drop_ratio', 'deviation']:
+                dv = -dv
+
             sign = '+' if dv >= 0 else ''
             extra = '%' if 'pct' in key else ''
-            print(f"  {sign}{dv:.4f}{extra}".rjust(14), end='')
+            # Format nicely
+            if real_key == 'starvation':
+                print(f"  {sign}{dv:.0f}".rjust(14), end='')
+            else:
+                print(f"  {sign}{dv:.4f}{extra}".rjust(14), end='')
         print()
     print(f"{'='*60}\n")
+
 
 
 # -----------------------------------------------------------------------------
@@ -360,7 +412,7 @@ def run_demo():
     matching the paper's expected results.
     """
     print("=" * 60)
-    print("  P4CCI Metrics Demo — Synthetic Data")
+    print("  P4CCI Metrics Demo - Synthetic Data")
     print("=" * 60)
     print("  (Reproducing expected results from paper Section VI)")
 
@@ -387,7 +439,7 @@ def run_demo():
         title='Baseline: CUBIC vs BBR (No Separation)'
     )
     baseline_metrics = print_scenario_report(
-        'Baseline — No CCA-Aware Separation',
+        'Baseline - No CCA-Aware Separation',
         baseline_data,
         link_capacity_mbps=1000.0,
     )
@@ -398,12 +450,12 @@ def run_demo():
     p4cci_bbr_ts   = [478, 476, 480, 482, 475, 479, 477, 480, 476, 482]
 
     p4cci_data = {
-        'CUBIC  (Q1 — loss-based)': {
+        'CUBIC  (Q1 â€” loss-based)': {
             'avg': _mean(p4cci_cubic_ts),
             'ts':  p4cci_cubic_ts,
             'retx': 42,
         },
-        'BBR    (Q2 — model-based)': {
+        'BBR    (Q2 â€” model-based)': {
             'avg': _mean(p4cci_bbr_ts),
             'ts':  p4cci_bbr_ts,
             'retx': 15,
@@ -415,7 +467,7 @@ def run_demo():
         title='P4CCI: CUBIC vs BBR (With Queue Separation)'
     )
     p4cci_metrics = print_scenario_report(
-        'P4CCI — CCA-Aware Queue Separation',
+        'P4CCI â€” CCA-Aware Queue Separation',
         p4cci_data,
         link_capacity_mbps=1000.0,
     )
@@ -430,7 +482,7 @@ def run_demo():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='P4CCI Metrics Evaluator — JFI, Link Utilization, Throughput Deviation',
+        description='P4CCI Metrics Evaluator â€” JFI, Link Utilization, Throughput Deviation',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )

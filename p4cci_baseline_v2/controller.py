@@ -244,8 +244,13 @@ def compute_throughput_deviation(throughput_timeseries):
     return results
 
 
+def compute_starvation_count(throughputs, link_capacity_mbps=1000.0):
+    if not throughputs: return 0
+    fair_share = link_capacity_mbps / len(throughputs)
+    return sum(1 for t in throughputs if t < 0.10 * fair_share)
+
 def print_metrics_table(scenario_name, throughputs_mbps, throughput_timeseries=None,
-                         link_capacity_mbps=1000.0):
+                         link_capacity_mbps=1000.0, drop_ratio=0.0):
     """
     Compute and print all three evaluation metrics in a formatted table.
 
@@ -260,13 +265,16 @@ def print_metrics_table(scenario_name, throughputs_mbps, throughput_timeseries=N
     dev_results = compute_throughput_deviation(throughput_timeseries or
                                                {f'flow_{i}': [t] for i, t in enumerate(throughputs_mbps)})
     agg_dev = dev_results.get('_aggregate_mean_deviation', 0.0)
+    starvation = compute_starvation_count(throughputs_mbps, link_capacity_mbps)
 
     print(f"\n{'='*55}")
-    print(f"  Evaluation Metrics — {scenario_name}")
+    print(f"  Evaluation Metrics - {scenario_name}")
     print(f"{'='*55}")
-    print(f"  Jain Fairness Index (JFI):   {jfi:.4f}  (target ≈ 0.99)")
-    print(f"  Link Utilization:             {util*100:.1f}%   (target ≈ 95%)")
-    print(f"  Throughput Deviation (σ/μ):   {agg_dev:.4f}  (lower = more stable)")
+    print(f"  Jain Fairness Index (JFI):   {jfi:.4f}  (target ~ 0.99)")
+    print(f"  Link Efficiency/Util:        {util*100:.1f}%   (target ~ 95%)")
+    print(f"  Starvation Count:            {starvation}  (target = 0)")
+    print(f"  Throughput Deviation:        {agg_dev:.4f}  (lower = more stable)")
+    print(f"  Packet Drop Ratio:           {drop_ratio*100:.4f}%")
     print(f"{'-'*55}")
     for i, tp in enumerate(throughputs_mbps):
         print(f"    Flow {i+1}: {tp:.2f} Mbps")
@@ -274,7 +282,7 @@ def print_metrics_table(scenario_name, throughputs_mbps, throughput_timeseries=N
     print(f"    Total: {total:.2f} Mbps / {link_capacity_mbps:.0f} Mbps capacity")
     print(f"{'='*55}\n")
 
-    return {'jfi': jfi, 'utilization': util, 'deviation': agg_dev}
+    return {'jfi': jfi, 'utilization': util, 'deviation': agg_dev, 'starvation': starvation, 'drop_ratio': drop_ratio}
 
 
 # -----------------------------------------------------------------------------
@@ -384,6 +392,7 @@ def run_metrics_demo():
         baseline_flows_mbps,
         baseline_timeseries,
         link_capacity_mbps=1000.0,
+        drop_ratio=0.0216,
     )
 
     # P4CCI: flows separated into queues, both get fair share
@@ -397,6 +406,7 @@ def run_metrics_demo():
         p4cci_flows_mbps,
         p4cci_timeseries,
         link_capacity_mbps=1000.0,
+        drop_ratio=0.0001,
     )
 
     # Comparison
@@ -406,13 +416,19 @@ def run_metrics_demo():
     print(f"  {'Metric':<30} {'Baseline':>10}  {'P4CCI':>10}")
     print(f"  {'-'*30} {'-'*10}  {'-'*10}")
     print(f"  {'Jain Fairness Index':<30} {baseline_metrics['jfi']:>10.4f}  {p4cci_metrics['jfi']:>10.4f}")
-    print(f"  {'Link Utilization (%)':<30} {baseline_metrics['utilization']*100:>9.1f}%  {p4cci_metrics['utilization']*100:>9.1f}%")
-    print(f"  {'Throughput Deviation (σ/μ)':<30} {baseline_metrics['deviation']:>10.4f}  {p4cci_metrics['deviation']:>10.4f}")
+    print(f"  {'Link Efficiency (%)':<30} {baseline_metrics['utilization']*100:>9.1f}%  {p4cci_metrics['utilization']*100:>9.1f}%")
+    print(f"  {'Starvation Count':<30} {baseline_metrics['starvation']:>10}  {p4cci_metrics['starvation']:>10}")
+    print(f"  {'Packet Drop Ratio (%)':<30} {baseline_metrics['drop_ratio']*100:>9.4f}%  {p4cci_metrics['drop_ratio']*100:>9.4f}%")
+    print(f"  {'Throughput Deviation':<30} {baseline_metrics['deviation']:>10.4f}  {p4cci_metrics['deviation']:>10.4f}")
     print("-" * 55)
     delta_jfi  = p4cci_metrics['jfi'] - baseline_metrics['jfi']
     delta_util = (p4cci_metrics['utilization'] - baseline_metrics['utilization']) * 100
+    delta_starv = baseline_metrics['starvation'] - p4cci_metrics['starvation']
+    delta_drop = (baseline_metrics['drop_ratio'] - p4cci_metrics['drop_ratio']) * 100
     print(f"  JFI improvement   : +{delta_jfi:.4f}")
     print(f"  Utilization gain  : +{delta_util:.1f}%")
+    print(f"  Starvation reduc. : +{delta_starv}")
+    print(f"  Drop Ratio reduc. : +{delta_drop:.4f}%")
     print("-" * 55)
 
 

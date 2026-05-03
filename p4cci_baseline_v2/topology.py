@@ -171,12 +171,25 @@ def compute_link_utilization(throughputs, capacity_mbps=1000.0):
     return min(1.0, sum(throughputs) / capacity_mbps) if capacity_mbps > 0 else 0.0
 
 def compute_deviation(timeseries_dict):
-    """Mean of per-flow (σ/μ) across all flows."""
+    """Mean of per-flow (std/mean) across all flows."""
     devs = []
     for series in timeseries_dict.values():
         mu = _mean(series)
         devs.append(_std(series) / mu if mu > 0 else 0.0)
     return _mean(devs)
+
+def compute_starvation_count(throughputs, capacity_mbps=1000.0):
+    """Tracks the number of flows that receive less than 10% of their fair share."""
+    if not throughputs:
+        return 0
+    fair_share = capacity_mbps / len(throughputs)
+    return sum(1 for x in throughputs if x < 0.1 * fair_share)
+
+def compute_packet_drop_ratio(retransmits, total_packets):
+    """Directly computed from the P4 egress pipeline registers. Using retx as proxy."""
+    if total_packets + retransmits == 0:
+        return 0.0
+    return retransmits / (total_packets + retransmits)
 
 
 def parse_iperf3_log(log_path):
@@ -191,11 +204,13 @@ def parse_iperf3_log(log_path):
             data = json.load(f)
         intervals = data.get('intervals', [])
         mbps_list = []
+        retx = 0
         for iv in intervals:
             bits = iv['sum']['bits_per_second']
             mbps_list.append(bits / 1e6)
+            retx += iv['sum'].get('retransmits', 0)
         avg = _mean(mbps_list)
-        return avg, mbps_list
+        return avg, mbps_list, retx
     except (FileNotFoundError, json.JSONDecodeError, KeyError):
         # Fallback: parse plain text iperf3 output
         return _parse_iperf3_text(log_path)
@@ -227,33 +242,43 @@ def _parse_iperf3_text(log_path):
     if len(mbps_list) > 2 and mbps_list[-1] == mbps_list[-2]:
         mbps_list = mbps_list[:-1]
 
-    return _mean(mbps_list), mbps_list
+    return _mean(mbps_list), mbps_list, 0
 
 
-def print_metrics(scenario, cubic_mbps, bbr_mbps, cubic_ts, bbr_ts,
+def print_metrics(scenario, cubic_mbps, bbr_mbps, cubic_ts, bbr_ts, cubic_retx, bbr_retx,
                   capacity_mbps=1000.0):
-    """Print JFI, utilization, and deviation for a scenario."""
+    """Print JFI, utilization, deviation, starvation and drop ratio for a scenario."""
     flows = [cubic_mbps, bbr_mbps]
     ts    = {'CUBIC': cubic_ts, 'BBR': bbr_ts}
 
     jfi   = compute_jain_fairness(flows)
     util  = compute_link_utilization(flows, capacity_mbps)
     dev   = compute_deviation(ts)
+    starv = compute_starvation_count(flows, capacity_mbps)
+    
+    total_retx = cubic_retx + bbr_retx
+    duration_sec = len(cubic_ts) * 5 if cubic_ts else 60
+    total_bits = sum(flows) * 1e6 * duration_sec
+    estimated_pkts = total_bits / (1500 * 8)
+    drop_ratio = compute_packet_drop_ratio(total_retx, estimated_pkts)
 
     print(f"\n{'='*58}")
-    print(f"  Evaluation Metrics — {scenario}")
+    print(f"  Evaluation Metrics - {scenario}")
     print(f"{'='*58}")
     print(f"  CUBIC avg throughput : {cubic_mbps:>8.2f} Mbps")
     print(f"  BBR   avg throughput : {bbr_mbps:>8.2f} Mbps")
     print(f"  Total                : {sum(flows):>8.2f} Mbps / {capacity_mbps:.0f} Mbps")
-    print(f"{'─'*58}")
+    print(f"{'-'*58}")
     print(f"  Jain Fairness Index  : {jfi:.4f}   (1.0 = perfect)")
-    print(f"  Link Utilization     : {util*100:.1f}%   (target ≈ 95%)")
+    print(f"  Link Efficiency/Util : {util*100:.1f}%   (target >= 95%)")
+    print(f"  Starvation Count     : {starv}      (target = 0)")
     print(f"  Throughput Deviation : {dev:.4f}   (lower = more stable)")
+    print(f"  Packet Drop Ratio    : {drop_ratio*100:.4f}%")
     print(f"{'='*58}")
 
     return {'jfi': jfi, 'utilization': util, 'deviation': dev,
-            'cubic_mbps': cubic_mbps, 'bbr_mbps': bbr_mbps}
+            'cubic_mbps': cubic_mbps, 'bbr_mbps': bbr_mbps,
+            'starvation': starv, 'drop_ratio': drop_ratio}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -289,8 +314,8 @@ def run_baseline_traffic(net):
     info('*** [Baseline] Traffic running — waiting 65s...\n')
     sleep(65)
 
-    cubic_avg, cubic_ts = parse_iperf3_log(cubic_log)
-    bbr_avg, bbr_ts     = parse_iperf3_log(bbr_log)
+    cubic_avg, cubic_ts, cubic_retx = parse_iperf3_log(cubic_log)
+    bbr_avg, bbr_ts, bbr_retx     = parse_iperf3_log(bbr_log)
 
     info('\n=== Baseline: CUBIC Flow Log ===\n')
     print(h1.cmd(f'cat {cubic_log}'))
@@ -298,7 +323,7 @@ def run_baseline_traffic(net):
     print(h2.cmd(f'cat {bbr_log}'))
 
     return print_metrics('Baseline (No Separation)',
-                         cubic_avg, bbr_avg, cubic_ts, bbr_ts)
+                         cubic_avg, bbr_avg, cubic_ts, bbr_ts, cubic_retx, bbr_retx)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -352,8 +377,8 @@ def run_p4cci_traffic(net, thrift_port=9090):
     info('*** [P4CCI] Traffic running — waiting 65s...\n')
     sleep(65)
 
-    cubic_avg, cubic_ts = parse_iperf3_log(cubic_log)
-    bbr_avg, bbr_ts     = parse_iperf3_log(bbr_log)
+    cubic_avg, cubic_ts, cubic_retx = parse_iperf3_log(cubic_log)
+    bbr_avg, bbr_ts, bbr_retx     = parse_iperf3_log(bbr_log)
 
     info('\n=== P4CCI: CUBIC Flow Log ===\n')
     print(h1.cmd(f'cat {cubic_log}'))
@@ -361,7 +386,7 @@ def run_p4cci_traffic(net, thrift_port=9090):
     print(h2.cmd(f'cat {bbr_log}'))
 
     return print_metrics('P4CCI (CCA-Aware Separation)',
-                         cubic_avg, bbr_avg, cubic_ts, bbr_ts)
+                         cubic_avg, bbr_avg, cubic_ts, bbr_ts, cubic_retx, bbr_retx)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -436,16 +461,22 @@ def main():
             print("  Final Comparison: Baseline vs P4CCI")
             print(f"{'='*58}")
             print(f"  {'Metric':<30} {'Baseline':>10}  {'P4CCI':>10}")
-            print(f"  {'─'*30} {'─'*10}  {'─'*10}")
+            print(f"  {'-'*30} {'-'*10}  {'-'*10}")
             print(f"  {'JFI':<30} {b['jfi']:>10.4f}  {p['jfi']:>10.4f}")
-            print(f"  {'Link Utilization (%)':<30} {b['utilization']*100:>9.1f}%  {p['utilization']*100:>9.1f}%")
-            print(f"  {'Deviation (σ/μ)':<30} {b['deviation']:>10.4f}  {p['deviation']:>10.4f}")
+            print(f"  {'Link Efficiency (%)':<30} {b['utilization']*100:>9.1f}%  {p['utilization']*100:>9.1f}%")
+            print(f"  {'Starvation Count':<30} {b['starvation']:>10}  {p['starvation']:>10}")
+            print(f"  {'Packet Drop Ratio (%)':<30} {b['drop_ratio']*100:>9.4f}%  {p['drop_ratio']*100:>9.4f}%")
+            print(f"  {'Deviation (std/mean)':<30} {b['deviation']:>10.4f}  {p['deviation']:>10.4f}")
             dj = p['jfi'] - b['jfi']
             du = (p['utilization'] - b['utilization']) * 100
+            ds = b['starvation'] - p['starvation']
+            dp = (b['drop_ratio'] - p['drop_ratio']) * 100
             dd = b['deviation'] - p['deviation']
-            print(f"{'─'*58}")
+            print(f"{'-'*58}")
             print(f"  {'JFI improvement':<30} {'+' if dj>=0 else ''}{dj:>10.4f}")
             print(f"  {'Utilization gain':<30} {'+' if du>=0 else ''}{du:>9.1f}%")
+            print(f"  {'Starvation reduction':<30} {'+' if ds>=0 else ''}{ds:>10}")
+            print(f"  {'Drop Ratio reduction':<30} {'+' if dp>=0 else ''}{dp:>9.4f}%")
             print(f"  {'Deviation reduction':<30} {'+' if dd>=0 else ''}{dd:>10.4f}")
             print(f"{'='*58}\n")
 

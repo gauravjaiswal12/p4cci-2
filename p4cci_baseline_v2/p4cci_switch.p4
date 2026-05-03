@@ -132,6 +132,12 @@ control MyIngress(inout headers_t hdr,
     // Per-flow byte counter for short-flow detection (Q0 = < ~10 MB)
     register<bit<32>>(65536) flow_bytes_reg;
 
+    // ── KBCS-style hardware counters ──────────────────────────────────────────
+    // reg_forwarded_bytes: Total IP payload bytes successfully forwarded per flow.
+    // Indexed by flow_id (16-bit CRC hash of 5-tuple). Read by collect_metrics.py
+    // via simple_switch_CLI at the end of each statistical run.
+    register<bit<32>>(65536) reg_forwarded_bytes;
+
     action drop() {
         mark_to_drop(standard_metadata);
     }
@@ -163,15 +169,16 @@ control MyIngress(inout headers_t hdr,
     }
 
     // CCA classification table — populated by controller after classification.
-    // Key: full 5-tuple (src_ip, dst_ip, src_port, dst_port).
-    // Action: set_cca_class(class_id) assigns the flow to a queue.
+    // Key: full 5-tuple with ternary matching so src_port can be wildcarded.
+    // Rules use (0 &&& 0) for src_port to match ANY ephemeral port.
+    // Action: set_cca_class(class_id) assigns the flow to a priority queue.
     // (Paper Section III-C, Table I)
     table cca_classification {
         key = {
-            hdr.ipv4.srcAddr: exact;
-            hdr.ipv4.dstAddr: exact;
-            hdr.tcp.srcPort:  exact;
-            hdr.tcp.dstPort:  exact;
+            hdr.ipv4.srcAddr: ternary;
+            hdr.ipv4.dstAddr: ternary;
+            hdr.tcp.srcPort:  ternary;   // wildcarded — iperf uses random ports
+            hdr.tcp.dstPort:  ternary;
         }
         actions = {
             set_cca_class;
@@ -226,6 +233,12 @@ control MyIngress(inout headers_t hdr,
                     flow_bytes_reg.write(meta.flow_id, cur_bytes);
                     meta.flow_bytes = cur_bytes;
 
+                    // ── KBCS hardware counter: increment forwarded bytes per flow ──
+                    bit<32> fwd_bytes;
+                    reg_forwarded_bytes.read(fwd_bytes, meta.flow_id);
+                    fwd_bytes = fwd_bytes + (bit<32>)hdr.ipv4.totalLen;
+                    reg_forwarded_bytes.write(meta.flow_id, fwd_bytes);
+
                     // Read last ACK and compute BIF
                     last_ack_reg.read(meta.last_ack, meta.flow_id);
                     meta.bif = hdr.tcp.seqNo - meta.last_ack;
@@ -267,6 +280,11 @@ control MyEgress(inout headers_t hdr,
     // The controller sets cca_class via the cca_classification table,
     // and this block steers each packet to the appropriate hardware queue.
 
+    // ── KBCS-style hardware counter: dropped packets per flow ─────────────────
+    // reg_drops: Incremented whenever a packet is marked to drop in egress.
+    // Indexed by flow_id from ingress metadata. Read by collect_metrics.py.
+    register<bit<32>>(65536) reg_drops;
+
     action assign_to_queue(bit<5> qid) {
         // v1model uses standard_metadata.priority (3-bit) to select queue
         // BMv2 supports up to 8 priority levels with --priority-queues flag
@@ -292,6 +310,14 @@ control MyEgress(inout headers_t hdr,
         // Apply queue steering for TCP flows that have been classified
         if (hdr.tcp.isValid()) {
             queue_assignment.apply();
+        }
+
+        // ── Increment drop counter if packet was marked to drop ───────────────
+        if (standard_metadata.egress_port == 511) { // 511 = DROP_PORT in BMv2
+            bit<32> drop_count;
+            reg_drops.read(drop_count, meta.flow_id);
+            drop_count = drop_count + 1;
+            reg_drops.write(meta.flow_id, drop_count);
         }
     }
 }

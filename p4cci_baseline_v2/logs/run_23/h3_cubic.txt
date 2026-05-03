@@ -1,0 +1,6 @@
+------------------------------------------------------------
+Client connecting to 10.0.0.7, TCP port 5003
+TCP window size: 64.0 KByte (default)
+------------------------------------------------------------
+tcp connect failed: Connection refused
+[  1] local 0.0.0.0 port 0 connected with 10.0.0.7 port 5003

@@ -1,0 +1,5 @@
+------------------------------------------------------------
+Client connecting to 10.0.0.8, TCP port 5004
+TCP window size: 64.0 KByte (default)
+------------------------------------------------------------
+[  1] local 10.0.0.4 port 42432 connected with 10.0.0.8 port 5004 (icwnd/mss/irtt=14/1448/75952)
